@@ -1,9 +1,10 @@
 # CMGDB
 Conley Morse Graph Data Base
 
-Install [Boost](https://www.boost.org/)
+Install [Boost](https://www.boost.org/) and [GMP](https://gmplib.org/)
 
 	brew install boost
+	brew install gmp
 
 Install the [Succinct Data Structure Library (SDSL)](https://github.com/simongog/sdsl-lite)
 
