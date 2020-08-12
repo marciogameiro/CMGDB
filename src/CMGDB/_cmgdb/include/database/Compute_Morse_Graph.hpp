@@ -8,7 +8,6 @@
 using namespace cimg_library;
 #endif
 
-
 #include <map>
 #include <stack>
 #include <vector>

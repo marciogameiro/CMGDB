@@ -102,14 +102,27 @@ class MorseGraph {
   
   //// FILE IO
 
-  /** Save to File */
+  // Save to File
   void save ( const char * filename ) const {
     std::ofstream ofs(filename);
     assert(ofs.good());
-    boost::archive::text_oarchive oa(ofs);
-    oa << *this;
+    for ( int vertex = 0; vertex < num_vertices_; ++vertex ) {
+      for ( Grid::iterator it = grid (vertex) -> begin ();
+            it != grid (vertex) -> end (); ++ it ) {
+        std::shared_ptr<Geo> geo = grid (vertex) -> geometry (it);
+        ofs << *geo << ", " << vertex << std::endl;
+      }
+    }
   }
-  
+
+  // /** Save to File */
+  // void save ( const char * filename ) const {
+  //   std::ofstream ofs(filename);
+  //   assert(ofs.good());
+  //   boost::archive::text_oarchive oa(ofs);
+  //   oa << *this;
+  // }
+
   /** Load from file */
   void load ( const char * filename ) {
     std::ifstream ifs(filename);

@@ -30,10 +30,12 @@ public:
     // Convert input to intervals
     interval x0 = getRectangleComponent ( rectangle, 0 );
     interval x1 = getRectangleComponent ( rectangle, 1 );
+    double a = - 0.1;
+    double b = 0.7;
 
     // Evaluate map
-    interval y0 = (p0 * x0 + p1 * x1 ) * exp ( -0.1 * (x0 + x1) );     
-    interval y1 = 0.7 * x0;
+    interval y0 = (p0 * x0 + p1 * x1 ) * exp ( a * (x0 + x1) );     
+    interval y1 = b * x0;
     
     // Return result
     return makeRectangle ( y0, y1 );

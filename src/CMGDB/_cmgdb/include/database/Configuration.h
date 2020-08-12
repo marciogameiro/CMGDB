@@ -36,7 +36,58 @@ public:
   int PHASE_SUBDIV_LIMIT;
   Rect PHASE_BOUNDS; 
   std::vector<bool> PHASE_PERIODIC;
-  
+
+  // Set configuration
+  void setConfiguration ( int param_dim, int phase_dim,
+                          int phase_subdiv_min, int phase_subdiv_max,
+                          int phase_subdiv_init, int phase_subdiv_limit,
+                          std::vector<double> const& phase_lower_bounds,
+                          std::vector<double> const& phase_upper_bounds ) {
+    std::string model_name = "Model name";
+    std::string model_desc = "Model description.";
+    int param_subdiv_depth = 1;
+
+    MODEL_NAME = model_name;
+    MODEL_DESC = model_desc;
+
+    // Parameter Space
+    PARAM_DIM = param_dim;
+
+    PARAM_SUBDIV_DEPTH . resize ( PARAM_DIM, param_subdiv_depth );
+
+    PARAM_SUBDIV_SIZES . resize ( PARAM_DIM );
+    for ( int d = 0; d < PARAM_DIM; ++ d ) {
+      PARAM_SUBDIV_SIZES [ d ] = 1 << PARAM_SUBDIV_DEPTH [ d ];
+    }
+
+    PARAM_BOUNDS . lower_bounds . resize ( PARAM_DIM );
+    PARAM_BOUNDS . upper_bounds . resize ( PARAM_DIM );
+
+    for ( int d = 0; d < PARAM_DIM; ++ d ) {
+      PARAM_BOUNDS . lower_bounds [ d ] = 0.0;
+      PARAM_BOUNDS . upper_bounds [ d ] = 1.0;
+    }
+    
+    PARAM_PERIODIC . resize ( PARAM_DIM, false );
+
+    // Phase Space
+    PHASE_DIM = phase_dim;
+    PHASE_SUBDIV_MIN = phase_subdiv_min;
+    PHASE_SUBDIV_MAX = phase_subdiv_max;
+    PHASE_SUBDIV_LIMIT = phase_subdiv_limit;
+    PHASE_SUBDIV_INIT = phase_subdiv_init;
+
+    PHASE_BOUNDS . lower_bounds . resize ( PHASE_DIM );
+    PHASE_BOUNDS . upper_bounds . resize ( PHASE_DIM );
+
+    for ( int d = 0; d < PHASE_DIM; ++ d ) {
+      PHASE_BOUNDS . lower_bounds [ d ] = phase_lower_bounds [d];
+      PHASE_BOUNDS . upper_bounds [ d ] = phase_upper_bounds [d];
+    }
+    
+    PHASE_PERIODIC . resize ( PHASE_DIM, false );
+  }
+
   // Loading
   void loadFromFile ( const char * filename ) {
     std::string filestring ( filename );

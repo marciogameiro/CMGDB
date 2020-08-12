@@ -45,7 +45,7 @@ public:
   /// geometry
   std::shared_ptr<Geo> 
   geometry ( const const_iterator & it ) const { return geometry ( *it ); }
-  
+
   /// Cover (for dispatch)
   std::vector<Grid::GridElement> 
   cover ( std::shared_ptr<Geo> geo ) const;

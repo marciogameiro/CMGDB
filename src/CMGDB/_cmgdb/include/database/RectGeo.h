@@ -50,7 +50,7 @@ public:
 
   RectGeo ( void ) {};
   RectGeo ( unsigned int size ) { lower_bounds . resize ( size );
-                                upper_bounds . resize ( size ); }
+                                  upper_bounds . resize ( size ); }
   unsigned int 
   dimension ( void ) const {
     return lower_bounds . size ();
@@ -184,15 +184,27 @@ RectGeo::intersects ( const RectGeo & other ) const {
   return true;
 }
 
-inline void 
+inline void
 RectGeo::print ( std::ostream & stream ) const {
   for ( unsigned int d = 0; d < lower_bounds . size (); ++ d ) {
-    stream << "[" << lower_bounds [ d ] << ", " 
-           << upper_bounds [ d ] << "]";
-    if ( d < lower_bounds . size () - 1 ) stream << "x";
+    stream << lower_bounds [d] << ", ";
+  }
+
+  for ( unsigned int d = 0; d < upper_bounds . size (); ++ d ) {
+    stream << upper_bounds [d];
+    if ( d < upper_bounds . size () - 1 ) {
+      stream << ", ";
+    }
   }
 }
 
-
+// inline void 
+// RectGeo::print ( std::ostream & stream ) const {
+//   for ( unsigned int d = 0; d < lower_bounds . size (); ++ d ) {
+//     stream << "[" << lower_bounds [ d ] << ", " 
+//            << upper_bounds [ d ] << "]";
+//     if ( d < lower_bounds . size () - 1 ) stream << "x";
+//   }
+// }
 
 #endif

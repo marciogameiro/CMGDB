@@ -1,12 +1,6 @@
 
 rm -rf build
-rm -rf bin
 
-mkdir build
-cd build
-cmake ..
-make
-
-mkdir ../bin
-mv CMGDB ../bin
-cp ../src/config.xml ../bin
+git submodule update --init --recursive
+pip uninstall -y CMGDB &> /dev/null || true
+pip install . --upgrade --no-deps --force-reinstall --no-cache-dir $@

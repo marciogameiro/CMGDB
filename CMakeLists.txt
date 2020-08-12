@@ -1,17 +1,30 @@
-cmake_minimum_required(VERSION 2.6)
+cmake_minimum_required(VERSION 3.1)
 
 project(CMGDB)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -ftemplate-depth=2048")
+add_subdirectory(lib/pybind11)
 
 find_package(Boost REQUIRED COMPONENTS chrono thread serialization)
 
-include_directories (${CMAKE_SOURCE_DIR}/include/database ${CMAKE_SOURCE_DIR}/include)
+include_directories (
+  /usr/local/include
+  /usr/include
+  /opt/local/include
+  ${HOME}/.local/include
+  ${USER_INCLUDE_PATH}/database
+  ${USER_INCLUDE_PATH} )
 
-include_directories (/usr/local/include /opt/local/include /usr/include ${HOME}/.local/include)
+link_directories (
+  /usr/local/lib
+  /usr/lib
+  ${HOME}/.local/lib
+  ${USER_LIBRARY_PATH} )
 
-link_directories (/usr/local/lib /usr/lib ${HOME}/.local/lib)
+pybind11_add_module(_cmgdb src/CMGDB/_cmgdb/CMGDB.cpp)
 
-add_executable(CMGDB src/CMGDB.cpp)
-
-target_link_libraries(CMGDB Boost::chrono Boost::thread Boost::serialization sdsl)
+target_link_libraries (
+  _cmgdb PRIVATE
+  Boost::chrono
+  Boost::thread
+  Boost::serialization
+  sdsl )
