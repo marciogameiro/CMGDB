@@ -47,14 +47,14 @@ public:
   }
 #endif
 
-
   RectGeo ( void ) {};
   RectGeo ( unsigned int size ) { lower_bounds . resize ( size );
                                   upper_bounds . resize ( size ); }
-  unsigned int 
+  uint64_t
   dimension ( void ) const {
     return lower_bounds . size ();
   }
+
   RectGeo ( unsigned int size, 
             const Real & value ) 
   { lower_bounds . resize ( size, value );
@@ -91,7 +91,16 @@ public:
   }
 
   bool intersects ( const RectGeo & other ) const;
-private: 
+
+  virtual std::vector<double> get_lower_bounds ( void ) const {
+    return lower_bounds;
+  }
+
+  virtual std::vector<double> get_upper_bounds ( void ) const {
+    return upper_bounds;
+  }
+
+private:
   virtual void print ( std::ostream & stream ) const;
 
   friend class boost::serialization::access; 

@@ -28,11 +28,16 @@ public:
   // Typedefs
   typedef Grid::size_type size_type;
   typedef Grid::GridElement Vertex;
-    
+
   // Constructor. Requires Grid and Map.
-  MapGraph ( std::shared_ptr<const Grid> grid, 
+  MapGraph ( std::shared_ptr<const Grid> grid,
              std::shared_ptr<const Map> f );
-  
+
+  // MapGraph ( std::shared_ptr<const Grid> grid,
+  //            std::shared_ptr<const Model> model );
+
+  void initialize ( void );
+
   /// adjacencies
   ///   Return vector of Vertices which are out-edge adjacencies of input v
   std::vector<Vertex> adjacencies ( const Vertex & v ) const;
@@ -52,12 +57,26 @@ private:
   std::vector<std::vector<Vertex> > adjacency_lists_;
 };
 
-inline 
+inline
 MapGraph::MapGraph ( std::shared_ptr<const Grid> grid,
-           std::shared_ptr<const Map> f ) : 
+                     std::shared_ptr<const Map> f ) :
 grid_ ( grid ),
 f_ ( f ),
 stored_graph ( false ) {
+  initialize ();
+}
+
+// inline
+// MapGraph::MapGraph ( std::shared_ptr<const Grid> grid,
+//                      std::shared_ptr<const Model> model ) :
+// grid_ ( grid ),
+// f_ ( model -> map () ),
+// stored_graph ( false ) {
+//   initialize ();
+// }
+
+inline void
+MapGraph::initialize ( void ) {
   if ( not f_ ) {
     throw std::logic_error ( "MapGraph::MapGraph. Unable to construct with uninitialized Map f\n");
   }
@@ -114,10 +133,24 @@ MapGraph::compute_adjacencies ( const Vertex & source ) const {
   return target;
 }
 
-
 inline MapGraph::size_type
 MapGraph::num_vertices ( void ) const {
   return grid_ -> size ();
+}
+
+/// Python Bindings
+
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+namespace py = pybind11;
+
+inline void
+MapGraphBinding(py::module &m) {
+  py::class_<MapGraph, std::shared_ptr<MapGraph>>(m, "MapGraph")
+    .def(py::init<std::shared_ptr<const Grid>, std::shared_ptr<const Map>>())
+    // .def(py::init<std::shared_ptr<const Grid>, std::shared_ptr<const Model>>())
+    .def("num_vertices", &MapGraph::num_vertices)
+    .def("adjacencies", &MapGraph::adjacencies);
 }
 
 #endif

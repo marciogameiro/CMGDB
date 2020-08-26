@@ -30,25 +30,47 @@ BOOST_CLASS_EXPORT_IMPLEMENT(SuccinctGrid);
 #include "PointerGrid.h"
 BOOST_CLASS_EXPORT_IMPLEMENT(PointerGrid);
 
+std::pair<MorseGraph, MapGraph> ComputeMorseGraph ( Model const& model ) {
+  std::shared_ptr<const Map> map = model . map ();
+  MorseGraph morsegraph ( model . phaseSpace () );
+  std::shared_ptr < Grid > phase_space = morsegraph . phaseSpace ();
+
+  int phase_subdiv_init = model . phase_subdiv_init ();
+  int phase_subdiv_min = model . phase_subdiv_min ();
+  int phase_subdiv_max = model . phase_subdiv_max ();
+  int phase_subdiv_limit = model . phase_subdiv_limit ();
+
+  // Compute Morse graph
+  Compute_Morse_Graph ( & morsegraph, phase_space, map, phase_subdiv_init,
+                        phase_subdiv_min, phase_subdiv_max, phase_subdiv_limit );
+
+  // ConleyMorseGraph & conleymorsegraph = morsegraph;
+
+  // Compute multi-valued map digraph
+  MapGraph map_graph ( phase_space, map );
+
+  return std::make_pair ( morsegraph, map_graph );
+}
+
 void computeMorseGraph ( MorseGraph & morsegraph,
-                        std::shared_ptr<const Map> map,
-                        const int SINGLECMG_INIT_PHASE_SUBDIVISIONS,
-                        const int SINGLECMG_MIN_PHASE_SUBDIVISIONS,
-                        const int SINGLECMG_MAX_PHASE_SUBDIVISIONS,
-                        const int SINGLECMG_COMPLEXITY_LIMIT,
-                        const char * outputfile ) {
+                         std::shared_ptr<const Map> map,
+                         const int SINGLECMG_INIT_PHASE_SUBDIVISIONS,
+                         const int SINGLECMG_MIN_PHASE_SUBDIVISIONS,
+                         const int SINGLECMG_MAX_PHASE_SUBDIVISIONS,
+                         const int SINGLECMG_COMPLEXITY_LIMIT,
+                         const char * outputfile ) {
 #ifdef CMG_VERBOSE
   std::cout << "SingleCMG: computeMorseGraph.\n";
 #endif
   std::shared_ptr < Grid > phase_space = morsegraph . phaseSpace ();
   clock_t start_time = clock ();
   Compute_Morse_Graph ( & morsegraph,
-                       phase_space,
-                       map,
-                       SINGLECMG_INIT_PHASE_SUBDIVISIONS,
-                       SINGLECMG_MIN_PHASE_SUBDIVISIONS,
-                       SINGLECMG_MAX_PHASE_SUBDIVISIONS,
-                       SINGLECMG_COMPLEXITY_LIMIT );
+                        phase_space,
+                        map,
+                        SINGLECMG_INIT_PHASE_SUBDIVISIONS,
+                        SINGLECMG_MIN_PHASE_SUBDIVISIONS,
+                        SINGLECMG_MAX_PHASE_SUBDIVISIONS,
+                        SINGLECMG_COMPLEXITY_LIMIT );
   clock_t stop_time = clock ();
   if ( outputfile != NULL ) {
     morsegraph . save ( outputfile );
@@ -127,8 +149,8 @@ void MorseGraphMap ( int phase_subdiv_min, int phase_subdiv_max,
                        phase_subdiv_min, phase_subdiv_max,
                        phase_subdiv_init, phase_subdiv_limit,
                        param_lower_bounds, param_upper_bounds,
-                       phase_lower_bounds, phase_upper_bounds );
-  std::shared_ptr<const Map> map = model . map (F);
+                       phase_lower_bounds, phase_upper_bounds, F );
+  std::shared_ptr<const Map> map = model . map ();
 
   MorseGraph morsegraph ( model . phaseSpace () );
 
@@ -164,8 +186,14 @@ void MorseGraphMap ( int phase_subdiv_min, int phase_subdiv_max,
 namespace py = pybind11;
 
 PYBIND11_MODULE(_cmgdb, m) {
+  ModelBinding(m);
+  GridBinding(m);
+  MapGraphBinding(m);
+  MorseGraphBinding(m);
+
   m.doc() = "Conley Morse Graph Database Module";
 
+  m.def("ComputeMorseGraph", &ComputeMorseGraph);
   m.def("MorseGraphIntvalMap", &MorseGraphIntvalMap);
   m.def("MorseGraphMap", &MorseGraphMap);
 }

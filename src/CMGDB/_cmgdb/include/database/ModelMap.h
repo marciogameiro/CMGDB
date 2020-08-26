@@ -34,14 +34,14 @@ public:
     double b = 0.7;
 
     // Evaluate map
-    interval y0 = (p0 * x0 + p1 * x1 ) * exp ( a * (x0 + x1) );     
+    interval y0 = (p0 * x0 + p1 * x1 ) * exp ( a * (x0 + x1) );
     interval y1 = b * x0;
-    
+
     // Return result
     return makeRectangle ( y0, y1 );
-  } 
+  }
 
-// Program interface (methods used by program)
+  // Program interface (methods used by program)
 
   ModelMap ( std::shared_ptr<Parameter> parameter ) {
     const RectGeo & rectangle = 

@@ -153,4 +153,18 @@ inline Grid::Grid ( void ) {
 inline Grid::~Grid ( void ) {
 }
 
+/// Python Bindings
+
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+namespace py = pybind11;
+
+inline void
+GridBinding(py::module &m) {
+  py::class_<Grid, std::shared_ptr<Grid>>(m, "Grid")
+    // .def(py::init<>())
+    .def("size", &Grid::size)
+    .def("subdivide", &Grid::subdivide);
+}
+
 #endif

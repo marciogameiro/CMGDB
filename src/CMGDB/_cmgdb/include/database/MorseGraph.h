@@ -24,7 +24,6 @@
 #include "Grid.h"
 #include "chomp/ConleyIndex.h"
 
-
 /** Conley-Morse Graph. (Can be called either MorseGraph or ConleyMorseGraph)
  *  It is the directed acyclic graph whose vertices may
  *  be annotated with "Grid" objects, representing combinatorial Morse sets,
@@ -75,13 +74,28 @@ class MorseGraph {
   
   /** return a number of vertices */
   unsigned int NumVertices ( void ) const;
-  
+
   /** return a iterator pair to all vertices */
   VertexIteratorPair Vertices ( void ) const;
   
   /** return a iterator pair to all edges */
   EdgeIteratorPair Edges ( void ) const;
-    
+
+  std::vector<uint64_t>
+  vertices ( void ) const;
+
+  std::vector<std::vector<uint64_t>>
+  edges ( void ) const;
+
+  std::vector<uint64_t>
+  adjacencies ( uint64_t vertex ) const;
+
+  std::vector<uint64_t>
+  morse_set ( uint64_t vertex ) const;
+
+  std::vector<std::vector<double>>
+  morse_set_boxes ( uint64_t vertex ) const;
+
   //// PROPERTY ACCESS
   
   /** Get the grid associated with the vertex. */
@@ -91,7 +105,7 @@ class MorseGraph {
   std::shared_ptr<const Grid> grid (Vertex vertex) const;
   std::shared_ptr<chomp::ConleyIndex_t> & conleyIndex (Vertex vertex);
   std::shared_ptr<const chomp::ConleyIndex_t> conleyIndex (Vertex vertex) const;
-  
+
   std::set< std::string > & annotation ( void );
   std::set< std::string > & annotation ( Vertex vertex );
   const std::set< std::string > & annotation ( void ) const;
@@ -202,6 +216,64 @@ inline unsigned int MorseGraph::NumVertices ( void ) const {
   return num_vertices_;
 }
 
+inline std::vector<uint64_t> MorseGraph::
+vertices ( void ) const {
+  std::vector<uint64_t> verts;
+  for ( uint64_t vertex = 0; vertex < num_vertices_; ++vertex ) {
+    verts . push_back ( vertex );
+  }
+  return verts;
+}
+
+inline std::vector<std::vector<uint64_t>> MorseGraph::
+edges ( void ) const {
+  std::vector<std::vector<uint64_t>> edge_list;
+  EdgeIteratorPair eip = Edges ();
+  for ( EdgeIterator e_it = eip . first; e_it != eip . second; ++ e_it ) {
+    uint64_t v1 = e_it -> first;
+    uint64_t v2 = e_it -> second;
+    std::vector<uint64_t> e_verts = { v1, v2 };
+    edge_list . push_back ( e_verts );
+  }
+  return edge_list;
+}
+
+inline std::vector<uint64_t> MorseGraph::
+adjacencies ( uint64_t vertex ) const {
+  std::vector<uint64_t> vert_adjacencies;
+  EdgeIteratorPair eip = Edges ();
+  for ( EdgeIterator e_it = eip . first; e_it != eip . second; ++ e_it ) {
+    if ( e_it -> first == vertex ) {
+      vert_adjacencies . push_back ( e_it -> second );
+    }
+  }
+  return vert_adjacencies;
+}
+
+inline std::vector<uint64_t> MorseGraph::
+morse_set ( uint64_t vertex ) const {
+  std::vector<uint64_t> morseset;
+  for ( Grid::iterator it = grid (vertex) -> begin ();
+            it != grid (vertex) -> end (); ++ it ) {
+    morseset . push_back ( *it );
+  }
+  return morseset;
+}
+
+inline std::vector<std::vector<double>> MorseGraph::
+morse_set_boxes ( uint64_t vertex ) const {
+  std::vector<std::vector<double>> morse_boxes;
+  for ( Grid::iterator it = grid (vertex) -> begin ();
+            it != grid (vertex) -> end (); ++ it ) {
+    std::shared_ptr<Geo> geo = grid (vertex) -> geometry (it);
+    std::vector<double> bounds = geo -> get_lower_bounds ();
+    std::vector<double> u_bounds = geo -> get_upper_bounds ();
+    bounds . insert(bounds . end(), u_bounds . begin(), u_bounds . end());
+    morse_boxes . push_back ( bounds );
+  }
+  return morse_boxes;
+}
+
 /** return a iterator pair to all vertices */
 inline MorseGraph::VertexIteratorPair
 MorseGraph::Vertices ( void ) const {
@@ -275,5 +347,24 @@ inline void MorseGraph::clearGrids ( void ) {
   }
 }
 
+/// Python Bindings
+
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+namespace py = pybind11;
+
+inline void
+MorseGraphBinding(py::module &m) {
+  py::class_<MorseGraph, std::shared_ptr<MorseGraph>>(m, "MorseGraph")
+    .def(py::init<>())
+    .def(py::init<std::shared_ptr<Grid>>())
+    .def(py::init<const char*>())
+    .def("num_vertices", &MorseGraph::NumVertices)
+    .def("vertices", &MorseGraph::vertices)
+    .def("edges", &MorseGraph::edges)
+    .def("adjacencies", &MorseGraph::adjacencies)
+    .def("morse_set", &MorseGraph::morse_set)
+    .def("morse_set_boxes", &MorseGraph::morse_set_boxes);
+}
 
 #endif

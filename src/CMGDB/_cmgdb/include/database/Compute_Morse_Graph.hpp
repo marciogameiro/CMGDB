@@ -60,13 +60,12 @@ std::cout << ".\n";
 #define CMG_VERBOSE_REPORT_MORSE_SETS
 #endif
 
-
 class MorseDecomposition {
 public:
 
   // Constructor
   template < class GridPtr >
-  MorseDecomposition ( GridPtr grid, int depth ) 
+  MorseDecomposition ( GridPtr grid, int depth )
   : grid_ ( grid ), spurious_(false), depth_(depth) {
     if ( grid_ . get () == NULL ) {
       throw std::logic_error ( "Bad Initialization of MorseDecomposition Object\n" );  
@@ -76,7 +75,7 @@ public:
     max_grid_internal_memory = std::max( max_grid_internal_memory, grid -> memory () );
 #endif
   }
-  
+
   // Deconstructor
   ~MorseDecomposition ( void ) {
     BOOST_FOREACH ( MorseDecomposition * child, children_ ) {
@@ -228,7 +227,7 @@ ConstructMorseDecomposition (MorseDecomposition * root,
 }
 
 // ConstructMorseDecomposition
-inline void 
+inline void
 ConstructMorseGraph (std::shared_ptr<Grid> master_grid,
                      MorseGraph * MG,
                      MorseDecomposition * root,
@@ -348,7 +347,6 @@ ConstructMorseGraph (std::shared_ptr<Grid> master_grid,
   join ( master_grid, grids . begin (), grids . end () );
   MG -> phaseSpace () = master_grid;
 }
-
 
 inline void 
 Compute_Morse_Graph (MorseGraph * MG,
