@@ -88,10 +88,11 @@ void computeMorseGraph ( MorseGraph & morsegraph,
   stats_file . close ();
 }
 
-void MorseGraphIntvalMap ( int phase_subdiv_min, int phase_subdiv_max,
-                           std::vector<double> const& phase_lower_bounds,
-                           std::vector<double> const& phase_upper_bounds,
-                           std::vector<double> const& params ) {
+MorseGraph MorseGraphIntvalMap ( int phase_subdiv_min, int phase_subdiv_max,
+                                 std::vector<double> const& phase_lower_bounds,
+                                 std::vector<double> const& phase_upper_bounds,
+                                 std::vector<double> const& params,
+                                 std::string output_file_name ) {
   std::vector<double> param_lower_bounds = params;
   std::vector<double> param_upper_bounds = params;
   int param_dim = params . size();
@@ -120,22 +121,27 @@ void MorseGraphIntvalMap ( int phase_subdiv_min, int phase_subdiv_max,
                       SINGLECMG_INIT_PHASE_SUBDIVISIONS,
                       SINGLECMG_MIN_PHASE_SUBDIVISIONS,
                       SINGLECMG_MAX_PHASE_SUBDIVISIONS,
-                      SINGLECMG_COMPLEXITY_LIMIT, "data.mg" );
+                      SINGLECMG_COMPLEXITY_LIMIT,
+                      output_file_name . c_str () );
+
   std::cout << "Total Time for Finding Morse Sets ";
   std::cout << "and reachability relation: ";
   std::cout << ": ";
 
-  ConleyMorseGraph & conleymorsegraph = morsegraph;
+  // ConleyMorseGraph & conleymorsegraph = morsegraph;
 
   // Always output the Morse Graph
-  std::cout << "Creating graphviz .dot file...\n";
-  CreateDotFile ( "morsegraph.gv", conleymorsegraph );
+  // std::cout << "Creating graphviz .dot file...\n";
+  // CreateDotFile ( "morsegraph.gv", conleymorsegraph );
+
+  return morsegraph;
 }
 
-void MorseGraphMap ( int phase_subdiv_min, int phase_subdiv_max,
-                     std::vector<double> const& phase_lower_bounds,
-                     std::vector<double> const& phase_upper_bounds,
-                     std::function<std::vector<double>(std::vector<double>)> const& F ) {
+MorseGraph MorseGraphMap ( int phase_subdiv_min, int phase_subdiv_max,
+                           std::vector<double> const& phase_lower_bounds,
+                           std::vector<double> const& phase_upper_bounds,
+                           std::string output_file_name,
+                           std::function<std::vector<double>(std::vector<double>)> const& F ) {
   std::vector<double> params {0.0};
   std::vector<double> param_lower_bounds = params;
   std::vector<double> param_upper_bounds = params;
@@ -165,16 +171,20 @@ void MorseGraphMap ( int phase_subdiv_min, int phase_subdiv_max,
                       SINGLECMG_INIT_PHASE_SUBDIVISIONS,
                       SINGLECMG_MIN_PHASE_SUBDIVISIONS,
                       SINGLECMG_MAX_PHASE_SUBDIVISIONS,
-                      SINGLECMG_COMPLEXITY_LIMIT, "data.mg" );
+                      SINGLECMG_COMPLEXITY_LIMIT,
+                      output_file_name . c_str () );
+
   std::cout << "Total Time for Finding Morse Sets ";
   std::cout << "and reachability relation: ";
   std::cout << ": ";
 
-  ConleyMorseGraph & conleymorsegraph = morsegraph;
+  // ConleyMorseGraph & conleymorsegraph = morsegraph;
 
   // Always output the Morse Graph
-  std::cout << "Creating graphviz .dot file...\n";
-  CreateDotFile ( "morsegraph.gv", conleymorsegraph );
+  // std::cout << "Creating graphviz .dot file...\n";
+  // CreateDotFile ( "morsegraph.gv", conleymorsegraph );
+
+  return morsegraph;
 }
 
 /// Python Bindings

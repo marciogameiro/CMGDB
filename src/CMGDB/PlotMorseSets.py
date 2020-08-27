@@ -3,7 +3,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 def PlotMorseSets(morse_sets, morse_nodes=None, proj_dims=None,
-                  cmap=matplotlib.cm.hsv, fig_w=8, fig_h=8):
+                  cmap=matplotlib.cm.brg, fig_w=8, fig_h=8):
     rect = morse_sets[0]
     assert len(rect) % 2 == 1, "Wrong dimension in Morse sets data"
     dim = int((len(rect) - 1) / 2)

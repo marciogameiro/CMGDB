@@ -93,12 +93,12 @@ public:
       };
 
       // Get min and max vectors (vectors with min and max at entry d)
-      const auto [min_v, max_v] = std::minmax_element ( F_y . begin(), F_y . end (), comp );
+      const auto min_max_v = std::minmax_element ( F_y . begin(), F_y . end (), comp );
 
       // Get lower and upper bounds in dimension d
       // Increase bounding box by grid size
-      double y_lower = (*min_v) [d] - grid_size;
-      double y_upper = (*max_v) [d] + grid_size;
+      double y_lower = (*min_max_v . first) [d] - grid_size;
+      double y_upper = (*min_max_v . second) [d] + grid_size;
 
       // Assign the values to image rectangle
       rect_image . lower_bounds [ d ] = y_lower;
