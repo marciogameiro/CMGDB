@@ -85,6 +85,12 @@ class MorseGraph {
   vertices ( void ) const;
 
   std::vector<std::pair<uint64_t, uint64_t>>
+  edges_unreduced ( void ) const;
+
+  std::vector<uint64_t>
+  adjacencies_unreduced ( uint64_t vertex ) const;
+
+  std::vector<std::pair<uint64_t, uint64_t>>
   edges ( void ) const;
 
   std::vector<uint64_t>
@@ -226,18 +232,36 @@ vertices ( void ) const {
 }
 
 inline std::vector<std::pair<uint64_t, uint64_t>> MorseGraph::
-edges ( void ) const {
-  // Old version: Returns the non-reduced Morse graph
-  // std::vector<std::vector<uint64_t>> edge_list;
-  // EdgeIteratorPair eip = Edges ();
-  // for ( EdgeIterator it = eip . first; it != eip . second; ++ it ) {
-  //   uint64_t v1 = it -> first;
-  //   uint64_t v2 = it -> second;
-  //   std::vector<uint64_t> e_verts = { v1, v2 };
-  //   edge_list . push_back ( e_verts );
-  // }
-  // return edge_list;
+edges_unreduced ( void ) const {
+  // Returns the non-reduced Morse graph edges
+  std::vector<std::pair<uint64_t, uint64_t>> edge_list;
+  EdgeIteratorPair eip = Edges ();
+  for ( EdgeIterator it = eip . first; it != eip . second; ++ it ) {
+    uint64_t source = it -> first;
+    uint64_t target = it -> second;
+    edge_list . push_back ( std::make_pair ( source, target ) );
+  }
+  return edge_list;
+}
 
+inline std::vector<uint64_t> MorseGraph::
+adjacencies_unreduced ( uint64_t vertex ) const {
+  // Returns the non-reduced Morse graph adjacencies
+  std::vector<uint64_t> vert_adjacencies;
+  EdgeIteratorPair eip = Edges ();
+  for ( EdgeIterator it = eip . first; it != eip . second; ++ it ) {
+    uint64_t source = it -> first;
+    uint64_t target = it -> second;
+    if ( source == vertex ) {
+      vert_adjacencies . push_back ( target );
+    }
+  }
+
+  return vert_adjacencies;
+}
+
+inline std::vector<std::pair<uint64_t, uint64_t>> MorseGraph::
+edges ( void ) const {
   // Get the transitively reduced Morse graph
   // R by computing R = G - G^2.
   // First get the original Morse graph G
@@ -283,17 +307,6 @@ edges ( void ) const {
 
 inline std::vector<uint64_t> MorseGraph::
 adjacencies ( uint64_t vertex ) const {
-  // Old version: Returns the non-reduced Morse graph
-  // std::vector<uint64_t> vert_adjacencies;
-  // EdgeIteratorPair eip = Edges ();
-  // for ( EdgeIterator it = eip . first; it != eip . second; ++ it ) {
-  //   uint64_t v1 = it -> first;
-  //   uint64_t v2 = it -> second;
-  //   if ( v1 == vertex ) {
-  //     vert_adjacencies . push_back ( v2 );
-  //   }
-  // }
-
   // Get list of edges
   std::vector<std::pair<uint64_t, uint64_t>> edge_list = edges ();
 
@@ -309,11 +322,17 @@ adjacencies ( uint64_t vertex ) const {
 
 inline std::vector<uint64_t> MorseGraph::
 morse_set ( uint64_t vertex ) const {
-  std::vector<uint64_t> morseset;
-  for ( Grid::iterator it = grid (vertex) -> begin ();
-            it != grid (vertex) -> end (); ++ it ) {
-    morseset . push_back ( *it );
-  }
+  // Old version: Does not return indices in phase space grid
+  // std::vector<uint64_t> morseset;
+  // for ( Grid::iterator it = grid (vertex) -> begin ();
+  //           it != grid (vertex) -> end (); ++ it ) {
+  //   morseset . push_back ( *it );
+  // }
+  // return morseset;
+
+  // Get indices of Morse grid elements as a subset of phase space grid
+  std::vector<uint64_t> morseset = phaseSpace () -> subset ( * grid (vertex) );
+
   return morseset;
 }
 
@@ -418,6 +437,8 @@ MorseGraphBinding(py::module &m) {
     .def(py::init<const char*>())
     .def("num_vertices", &MorseGraph::NumVertices)
     .def("vertices", &MorseGraph::vertices)
+    .def("edges_unreduced", &MorseGraph::edges_unreduced)
+    .def("adjacencies_unreduced", &MorseGraph::adjacencies_unreduced)
     .def("edges", &MorseGraph::edges)
     .def("adjacencies", &MorseGraph::adjacencies)
     .def("morse_set", &MorseGraph::morse_set)

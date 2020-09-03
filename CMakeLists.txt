@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.1)
 
 project(CMGDB)
 
+if(APPLE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -stdlib=libc++")
+endif(APPLE)
+
 add_subdirectory(lib/pybind11)
 
 find_package(Boost REQUIRED COMPONENTS chrono thread serialization)
