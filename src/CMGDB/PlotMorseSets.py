@@ -27,6 +27,13 @@ def PlotBoxesScatter(morse_sets, num_morse_sets=None, morse_nodes=None,
     rect = morse_sets[0]
     assert len(rect) % 2 == 1, "Wrong dimension in Morse sets data"
     dim = int((len(rect) - 1) / 2)
+    if dim == 1:
+        # Add extra fake dimension to plot
+        x0_min, x0_max, node = morse_sets[0]
+        x1_min = 0
+        x1_max = x0_max - x0_min
+        morse_sets = [[x0_min, x1_min, x0_max, x1_max, node] for x0_min, x0_max, node in morse_sets]
+        dim = 2
     if num_morse_sets == None:
         num_morse_sets = max([int(rect[-1]) for rect in morse_sets]) + 1
     if morse_nodes == None:
