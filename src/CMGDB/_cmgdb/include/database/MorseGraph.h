@@ -102,6 +102,9 @@ class MorseGraph {
   std::vector<std::vector<double>>
   morse_set_boxes ( uint64_t vertex ) const;
 
+  std::vector<double>
+  phase_space_box ( uint64_t index ) const;
+
   //// PROPERTY ACCESS
   
   /** Get the grid associated with the vertex. */
@@ -350,6 +353,18 @@ morse_set_boxes ( uint64_t vertex ) const {
   return morse_boxes;
 }
 
+inline std::vector<double> MorseGraph::
+phase_space_box ( uint64_t index ) const {
+  // Get geometry for grid element given by index
+  std::shared_ptr<Geo> geo = phaseSpace () -> geometry (index);
+  // Get lower and upper bound for this grid
+  std::vector<double> bounds = geo -> get_lower_bounds ();
+  std::vector<double> u_bounds = geo -> get_upper_bounds ();
+  bounds . insert(bounds . end(), u_bounds . begin(), u_bounds . end());
+
+  return bounds;
+}
+
 /** return a iterator pair to all vertices */
 inline MorseGraph::VertexIteratorPair
 MorseGraph::Vertices ( void ) const {
@@ -442,7 +457,8 @@ MorseGraphBinding(py::module &m) {
     .def("edges", &MorseGraph::edges)
     .def("adjacencies", &MorseGraph::adjacencies)
     .def("morse_set", &MorseGraph::morse_set)
-    .def("morse_set_boxes", &MorseGraph::morse_set_boxes);
+    .def("morse_set_boxes", &MorseGraph::morse_set_boxes)
+    .def("phase_space_box", &MorseGraph::phase_space_box);
 }
 
 #endif
