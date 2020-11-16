@@ -97,6 +97,7 @@ MorseGraph MorseGraphIntvalMap ( int phase_subdiv_min, int phase_subdiv_max,
   std::vector<double> param_upper_bounds = params;
   int param_dim = params . size();
   int phase_dim = phase_lower_bounds . size();
+  std::vector<bool> phase_periodic ( phase_dim, false );
   int phase_subdiv_init = 0;
   int phase_subdiv_limit = 10000;
 
@@ -105,7 +106,8 @@ MorseGraph MorseGraphIntvalMap ( int phase_subdiv_min, int phase_subdiv_max,
                        phase_subdiv_min, phase_subdiv_max,
                        phase_subdiv_init, phase_subdiv_limit,
                        param_lower_bounds, param_upper_bounds,
-                       phase_lower_bounds, phase_upper_bounds );
+                       phase_lower_bounds, phase_upper_bounds,
+                       phase_periodic );
   std::shared_ptr<const Map> map = model . map ();
 
   MorseGraph morsegraph ( model . phaseSpace () );
@@ -147,6 +149,7 @@ MorseGraph MorseGraphMap ( int phase_subdiv_min, int phase_subdiv_max,
   std::vector<double> param_upper_bounds = params;
   int param_dim = params . size();
   int phase_dim = phase_lower_bounds . size();
+  std::vector<bool> phase_periodic ( phase_dim, false );
   int phase_subdiv_init = 0;
   int phase_subdiv_limit = 10000;
 
@@ -155,7 +158,8 @@ MorseGraph MorseGraphMap ( int phase_subdiv_min, int phase_subdiv_max,
                        phase_subdiv_min, phase_subdiv_max,
                        phase_subdiv_init, phase_subdiv_limit,
                        param_lower_bounds, param_upper_bounds,
-                       phase_lower_bounds, phase_upper_bounds, F );
+                       phase_lower_bounds, phase_upper_bounds,
+                       phase_periodic, F );
   std::shared_ptr<const Map> map = model . map ();
 
   MorseGraph morsegraph ( model . phaseSpace () );

@@ -42,7 +42,8 @@ public:
                           int phase_subdiv_min, int phase_subdiv_max,
                           int phase_subdiv_init, int phase_subdiv_limit,
                           std::vector<double> const& phase_lower_bounds,
-                          std::vector<double> const& phase_upper_bounds ) {
+                          std::vector<double> const& phase_upper_bounds,
+                          std::vector<bool> const& phase_periodic ) {
     std::string model_name = "Model name";
     std::string model_desc = "Model description.";
     int param_subdiv_depth = 1;
@@ -79,13 +80,13 @@ public:
 
     PHASE_BOUNDS . lower_bounds . resize ( PHASE_DIM );
     PHASE_BOUNDS . upper_bounds . resize ( PHASE_DIM );
+    PHASE_PERIODIC . resize ( PHASE_DIM, false );
 
     for ( int d = 0; d < PHASE_DIM; ++ d ) {
       PHASE_BOUNDS . lower_bounds [ d ] = phase_lower_bounds [d];
       PHASE_BOUNDS . upper_bounds [ d ] = phase_upper_bounds [d];
+      PHASE_PERIODIC [ d ] = phase_periodic [d];
     }
-    
-    PHASE_PERIODIC . resize ( PHASE_DIM, false );
   }
 
   // Loading
@@ -209,7 +210,7 @@ public:
       phase_lbss >> PHASE_BOUNDS . lower_bounds [ d ];
       phase_ubss >> PHASE_BOUNDS . upper_bounds [ d ];
     }
-    
+
     PHASE_PERIODIC . resize ( PHASE_DIM, false );
     boost::optional<std::string> phase_periodic = pt.get_optional<std::string>("config.phase.periodic");
     if ( phase_periodic ) {
@@ -220,10 +221,8 @@ public:
         PHASE_PERIODIC [ d ] = (bool) x;
       }
     }
-    
-    
   }
-  
+
   friend class boost::serialization::access;
   template<class Archive>
   void serialize(Archive & ar, const unsigned int version)
