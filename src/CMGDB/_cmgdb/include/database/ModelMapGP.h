@@ -1,59 +1,35 @@
 
-#ifndef CMDP_MODELPOINTMAPF_H
-#define CMDP_MODELPOINTMAPF_H
+#ifndef CMDP_MODELMAPGP_H
+#define CMDP_MODELMAPGP_H
 
 #include "Map.h"
 #include "EuclideanParameterSpace.h"
 #include "RectGeo.h"
 #include "simple_interval.h"
+#include "libgp/gp.h"
 #include <memory>
 #include <vector>
 #include <algorithm>
 
-class ModelPointMapF : public Map {
+class ModelMapGP : public Map {
 public:
   typedef simple_interval<double> interval;
-
-  // User interface: method to be provided by user
-
-  // Map F
-  std::function<std::vector<double>(std::vector<double>)> F;
 
   // Parameter variable
   // Not using parameters, but leave here for now
   interval p0;
-  
-  // Constructor: sets parameter variables
-  void assign ( RectGeo const& rectangle,
-                std::function<std::vector<double>(std::vector<double>)> const& F_map ) {
-    // Set map F
-    F = F_map;
-
-    // Initialize phase dim to 0
-    phase_dim_ = 0;
-
-    // Read parameter intervals from input rectangle
-    p0 = getRectangleComponent ( rectangle, 0 );
-  }
 
   // Map
   // Must take a rectangle as input and return the image
   // as a rectangle.
   //
-  // Define how to evaluate the input map. The input map
+  // Define how to evaluate the GP map. The GP map
   // is a map defined on points, so we evaluate the map
   // at each corner of the rectangle and put a bounding
   // box around their images. We then add a grid sized
   // layer of boxes around the bounding box to construct
   // the rectangle representing the image of the map.
   RectGeo operator () ( const RectGeo & rectangle ) const {
-    // Define dimension and verts_cube_ if not defined
-    if ( phase_dim_ == 0 ) {
-      // Set phase space dimension
-      phase_dim_ = rectangle . dimension ();
-      verts_cube_ = getVertsUnitCube ( phase_dim_ );
-    }
-
     // Values of F at the corner points
     std::vector<std::vector<double>> F_y;
 
@@ -74,7 +50,11 @@ public:
         x . push_back ( x_d ); // Push to vector x
       }
       // Evaluate F at x and push to F_y
-      F_y . push_back ( F (x) );
+      std::vector<double> y;
+      for ( int d = 0; d < phase_dim_; ++ d ) {
+        y . push_back ( GPs[d] . f( x . data () ) );
+      }
+      F_y . push_back ( y );
     }
 
     // Rectangle for image of F
@@ -97,10 +77,12 @@ public:
 
       // Get lower and upper bounds in dimension d
       // Increase bounding box by grid size
-      double y_lower = (*min_max_v . first) [d];
-      double y_upper = (*min_max_v . second) [d];
+      // double y_lower = (*min_max_v . first) [d];
+      // double y_upper = (*min_max_v . second) [d];
       // double y_lower = (*min_max_v . first) [d] - grid_size;
       // double y_upper = (*min_max_v . second) [d] + grid_size;
+      double y_lower = (*min_max_v . first) [d] - 1.0 * grid_size;
+      double y_upper = (*min_max_v . second) [d] + 1.0 * grid_size;
 
       // Assign the values to image rectangle
       rect_image . lower_bounds [ d ] = y_lower;
@@ -109,15 +91,42 @@ public:
 
     // Return result
     return rect_image;
-  } 
+  }
 
- // Program interface (methods used by program)
-
-  ModelPointMapF ( std::shared_ptr<Parameter> parameter,
-                   std::function<std::vector<double>(std::vector<double>)> const& F ) {
-    const RectGeo & rectangle = 
+  // Model initialization
+  ModelMapGP ( std::shared_ptr<Parameter> parameter,
+               std::vector<std::vector<double>> const& X_train,
+               std::vector<std::vector<double>> const& Y_train ) :
+    // Initilize phase space dimension
+    phase_dim_ (X_train[0] . size()) {
+    const RectGeo & rectangle =
       * std::dynamic_pointer_cast<EuclideanParameter> ( parameter ) -> geo;
-    assign ( rectangle, F );
+    // Set parameter intervals from rectangle
+    p0 = getRectangleComponent ( rectangle, 0 );
+
+    // Train one GP per dimension
+    for ( int d = 0; d < phase_dim_; ++ d ) {
+      // Initilize the Gaussian processes using the squared exponential
+      // covariance function with additive white noise
+      libgp::GaussianProcess gp(phase_dim_, "CovSum ( CovSEiso, CovNoise)");
+
+      // initialize hyper parameters vector
+      Eigen::VectorXd params(gp . covf() . get_param_dim ());
+      params << 0.0, 0.0, -2.0;
+
+      // set parameters of covariance function
+      gp . covf() . set_loghyper (params);
+
+      // Add the training data
+      for( int i = 0; i < X_train . size(); ++ i) {
+        gp . add_pattern (X_train [i] . data (), Y_train [i][d]);
+      }
+
+      GPs . push_back (gp);
+    }
+
+    // Get the vertices of the unit cube
+    verts_cube_ = getVertsUnitCube ( phase_dim_ );
   }
 
   std::shared_ptr<Geo>
@@ -126,9 +135,14 @@ public:
         operator () ( * std::dynamic_pointer_cast<RectGeo> ( geo ) ) ) );
   }
 private:
+  uint64_t phase_dim_;
+
+  // Gaussian Processes. Declare it mutable so it
+  // can potentially be modified inside const functions
+  mutable std::vector<libgp::GaussianProcess> GPs;
+
   // Used to get corners of a rectangle
-  mutable std::vector<std::vector<int>> verts_cube_;
-  mutable uint64_t phase_dim_;
+  std::vector<std::vector<int>> verts_cube_;
 
   interval getRectangleComponent ( const RectGeo & rectangle, int d ) const {
     return interval (rectangle . lower_bounds [ d ], rectangle . upper_bounds [ d ]);

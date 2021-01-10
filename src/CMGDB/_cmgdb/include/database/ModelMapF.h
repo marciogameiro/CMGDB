@@ -37,7 +37,7 @@ public:
   // Must take a rectangle as input and return the image
   // as a rectangle.
   //
-  // Define how to evaluet the input map. The input map
+  // Define how to evaluate the input map. The input map
   // is a map defined on rectangles defined as a product
   // of intervals. The intervals are represented by a list
   // of bounds, first the lower bounds of each variables

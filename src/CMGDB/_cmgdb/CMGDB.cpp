@@ -24,6 +24,8 @@
 
 #include "Configuration.h"
 
+#include "libgp/libgp.hpp"
+
 #include <boost/serialization/export.hpp>
 #include "SuccinctGrid.h"
 BOOST_CLASS_EXPORT_IMPLEMENT(SuccinctGrid);

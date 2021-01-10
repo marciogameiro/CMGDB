@@ -3,6 +3,7 @@
 
 #include "ModelMap.h"
 #include "ModelMapF.h"
+#include "ModelMapGP.h"
 #include "Map.h"
 #include "EuclideanParameterSpace.h"
 #include "TreeGrid.h"
@@ -80,6 +81,20 @@ class Model {
           std::vector<bool> const& phase_periodic,
           std::function<std::vector<double>(std::vector<double>)> const& F );
 
+  // Model with Gaussian Process with training data X and y
+  Model ( int phase_subdiv,
+          std::vector<double> const& phase_lower_bounds,
+          std::vector<double> const& phase_upper_bounds,
+          std::vector<std::vector<double>> const& X,
+          std::vector<std::vector<double>> const& Y );
+
+  // Model with Gaussian Process with training data X and y
+  Model ( int phase_subdiv_min, int phase_subdiv_max,
+          std::vector<double> const& phase_lower_bounds,
+          std::vector<double> const& phase_upper_bounds,
+          std::vector<std::vector<double>> const& X,
+          std::vector<std::vector<double>> const& Y );
+
   /// initialize
   ///   Given command line arguments, load necessary files 
   ///   required for initializtion.
@@ -101,6 +116,17 @@ class Model {
                     std::vector<double> const& phase_upper_bounds,
                     std::vector<bool> const& phase_periodic,
                     std::function<std::vector<double>(std::vector<double>)> const& F );
+
+  void initialize ( int param_dim, int phase_dim,
+                    int phase_subdiv_min, int phase_subdiv_max,
+                    int phase_subdiv_init, int phase_subdiv_limit,
+                    std::vector<double> const& param_lower_bounds,
+                    std::vector<double> const& param_upper_bounds,
+                    std::vector<double> const& phase_lower_bounds,
+                    std::vector<double> const& phase_upper_bounds,
+                    std::vector<bool> const& phase_periodic,
+                    std::vector<std::vector<double>> const& X,
+                    std::vector<std::vector<double>> const& Y );
 
   /// parameterSpace
   ///   return a shared ptr to the parameter space
@@ -387,6 +413,54 @@ Model::Model ( int phase_subdiv_min, int phase_subdiv_max,
                phase_periodic, F );
 }
 
+inline
+Model::Model ( int phase_subdiv,
+               std::vector<double> const& phase_lower_bounds,
+               std::vector<double> const& phase_upper_bounds,
+               std::vector<std::vector<double>> const& X,
+               std::vector<std::vector<double>> const& Y ) {
+  std::vector<double> params {0.0};
+  std::vector<double> param_lower_bounds = params;
+  std::vector<double> param_upper_bounds = params;
+  int param_dim = params . size();
+  int phase_dim = phase_lower_bounds . size();
+  std::vector<bool> phase_periodic ( phase_dim, false );
+  int phase_subdiv_init = phase_subdiv;
+  int phase_subdiv_min = phase_subdiv;
+  int phase_subdiv_max = phase_subdiv;
+  int phase_subdiv_limit = 10000;
+
+  initialize ( param_dim, phase_dim,
+               phase_subdiv_min, phase_subdiv_max,
+               phase_subdiv_init, phase_subdiv_limit,
+               param_lower_bounds, param_upper_bounds,
+               phase_lower_bounds, phase_upper_bounds,
+               phase_periodic, X, Y );
+}
+
+inline
+Model::Model ( int phase_subdiv_min, int phase_subdiv_max,
+               std::vector<double> const& phase_lower_bounds,
+               std::vector<double> const& phase_upper_bounds,
+               std::vector<std::vector<double>> const& X,
+               std::vector<std::vector<double>> const& Y ) {
+  std::vector<double> params {0.0};
+  std::vector<double> param_lower_bounds = params;
+  std::vector<double> param_upper_bounds = params;
+  int param_dim = params . size();
+  int phase_dim = phase_lower_bounds . size();
+  std::vector<bool> phase_periodic ( phase_dim, false );
+  int phase_subdiv_init = 0;
+  int phase_subdiv_limit = 10000;
+
+  initialize ( param_dim, phase_dim,
+               phase_subdiv_min, phase_subdiv_max,
+               phase_subdiv_init, phase_subdiv_limit,
+               param_lower_bounds, param_upper_bounds,
+               phase_lower_bounds, phase_upper_bounds,
+               phase_periodic, X, Y );
+}
+
 inline void
 Model::initialize ( int param_dim, int phase_dim,
                     int phase_subdiv_min, int phase_subdiv_max,
@@ -448,6 +522,39 @@ Model::initialize ( int param_dim, int phase_dim,
 
   // Set pointer to map
   map_ . reset ( new ModelMapF ( command_line_parameter_, F ) );
+}
+
+inline void
+Model::initialize ( int param_dim, int phase_dim,
+                    int phase_subdiv_min, int phase_subdiv_max,
+                    int phase_subdiv_init, int phase_subdiv_limit,
+                    std::vector<double> const& param_lower_bounds,
+                    std::vector<double> const& param_upper_bounds,
+                    std::vector<double> const& phase_lower_bounds,
+                    std::vector<double> const& phase_upper_bounds,
+                    std::vector<bool> const& phase_periodic,
+                    std::vector<std::vector<double>> const& X,
+                    std::vector<std::vector<double>> const& Y ) {
+
+  config_ . setConfiguration ( param_dim, phase_dim,
+                               phase_subdiv_min, phase_subdiv_max,
+                               phase_subdiv_init, phase_subdiv_limit,
+                               phase_lower_bounds, phase_upper_bounds,
+                               phase_periodic );
+  std::shared_ptr<Grid> parameter_grid ( new PARAMETER_GRID );
+  parameter_space_ . reset ( new EuclideanParameterSpace );
+  parameter_space_ -> initialize ( config_, parameter_grid );
+  // Load "command line" parameter
+  int dim = parameter_space_ -> dimension ();
+  command_line_parameter_ . reset ( new EuclideanParameter ( new RectGeo ( dim ) ) );
+  RectGeo & geo = * command_line_parameter_ -> geo;
+  for ( int d = 0; d < dim; ++ d ) {
+    geo . lower_bounds [ d ] = param_lower_bounds [d];
+    geo . upper_bounds [ d ] = param_upper_bounds [d];
+  }
+
+  // Set pointer to map
+  map_ . reset ( new ModelMapGP ( command_line_parameter_, X, Y ) );
 }
 
 inline int
@@ -596,6 +703,12 @@ ModelBinding(py::module &m) {
     .def(py::init<int, int, int, int, std::vector<double> const&, std::vector<double> const&,
                   std::vector<bool> const&,
                   std::function<std::vector<double>(std::vector<double>)> const&>())
+    .def(py::init<int, std::vector<double> const&, std::vector<double> const&,
+                  std::vector<std::vector<double>> const&,
+                  std::vector<std::vector<double>> const&>())
+    .def(py::init<int, int, std::vector<double> const&, std::vector<double> const&,
+                  std::vector<std::vector<double>> const&,
+                  std::vector<std::vector<double>> const&>())
     .def("parameterSpace", &Model::parameterSpace)
     .def("phaseSpace", &Model::phaseSpace)
     .def("setmap", &Model::setmap)

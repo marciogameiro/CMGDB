@@ -9,6 +9,7 @@ endif(APPLE)
 add_subdirectory(lib/pybind11)
 
 find_package(Boost REQUIRED COMPONENTS chrono thread serialization)
+find_package (Eigen3 REQUIRED NO_MODULE)
 
 include_directories (
   /usr/local/include
@@ -31,4 +32,5 @@ target_link_libraries (
   Boost::chrono
   Boost::thread
   Boost::serialization
+  Eigen3::Eigen
   sdsl )
