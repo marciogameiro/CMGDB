@@ -23,7 +23,9 @@ def PlotMorseGraph(morse_graph, cmap=matplotlib.cm.brg):
 
         def vertex_label(v):
             # Return vertex label
-            return str(v) # For now just use index
+            if len(graph.annotations(v)):
+                return str(v) + ' : (' + ', '.join(graph.annotations(v)) + ')'
+            return str(v) # Just use index if no annotations
 
         # Make graphviz string
         gv = 'digraph {\n'

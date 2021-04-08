@@ -23,6 +23,7 @@
 
 #include "Grid.h"
 #include "chomp/ConleyIndex.h"
+#include "conleyIndexString.h"
 
 /** Conley-Morse Graph. (Can be called either MorseGraph or ConleyMorseGraph)
  *  It is the directed acyclic graph whose vertices may
@@ -51,7 +52,7 @@ class MorseGraph {
   /** Load MorseGraph from file */
   MorseGraph ( const char * filename );
   // WRITE FUNCTIONS
-  
+
   /** Create a new vertex and return the descriptor of the vertex.
    *  The vertex is not connected to anywhere.
    *  An empty grid and ConleyIndex are allocated and
@@ -83,6 +84,9 @@ class MorseGraph {
 
   std::vector<uint64_t>
   vertices ( void ) const;
+
+  std::vector<std::string>
+  annotations ( uint64_t vertex ) const;
 
   std::vector<std::pair<uint64_t, uint64_t>>
   edges_unreduced ( void ) const;
@@ -232,6 +236,14 @@ vertices ( void ) const {
     verts . push_back ( vertex );
   }
   return verts;
+}
+
+inline std::vector<std::string> MorseGraph::
+annotations ( uint64_t vertex ) const {
+  if ( not conleyIndex ( vertex ) ) {
+    return {};
+  }
+  return conleyIndexString ( * conleyIndex ( vertex ) );
 }
 
 inline std::vector<std::pair<uint64_t, uint64_t>> MorseGraph::
@@ -452,6 +464,7 @@ MorseGraphBinding(py::module &m) {
     .def(py::init<const char*>())
     .def("num_vertices", &MorseGraph::NumVertices)
     .def("vertices", &MorseGraph::vertices)
+    .def("annotations", &MorseGraph::annotations)
     .def("edges_unreduced", &MorseGraph::edges_unreduced)
     .def("adjacencies_unreduced", &MorseGraph::adjacencies_unreduced)
     .def("edges", &MorseGraph::edges)

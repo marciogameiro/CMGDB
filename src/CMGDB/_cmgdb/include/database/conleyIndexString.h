@@ -89,10 +89,12 @@ conleyIndexString ( const chomp::ConleyIndex_t & ci,
 
     std::stringstream ss;
     BOOST_FOREACH ( const Polynomial & poly, shift_class ) {
-      ss << poly << "\n";
+      ss << poly;
+      // ss << poly << "\n";
     }
     if ( shift_class . empty () ) {
-      ss << "Trivial.\n";
+      ss << "0";
+      // ss << "Trivial.\n";
     }
 
     result . push_back ( ss . str () );

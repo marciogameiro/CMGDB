@@ -32,7 +32,7 @@ BOOST_CLASS_EXPORT_IMPLEMENT(SuccinctGrid);
 #include "PointerGrid.h"
 BOOST_CLASS_EXPORT_IMPLEMENT(PointerGrid);
 
-std::pair<MorseGraph, MapGraph> ComputeMorseGraph ( Model const& model ) {
+std::pair<MorseGraph, MapGraph> ComputeConleyMorseGraph ( Model const& model ) {
   std::shared_ptr<const Map> map = model . map ();
   MorseGraph morsegraph ( model . phaseSpace () );
   std::shared_ptr < Grid > phase_space = morsegraph . phaseSpace ();
@@ -46,7 +46,41 @@ std::pair<MorseGraph, MapGraph> ComputeMorseGraph ( Model const& model ) {
   Compute_Morse_Graph ( & morsegraph, phase_space, map, phase_subdiv_init,
                         phase_subdiv_min, phase_subdiv_max, phase_subdiv_limit );
 
-  // ConleyMorseGraph & conleymorsegraph = morsegraph;
+  std::shared_ptr < TreeGrid > phase_space_chomp =
+    std::dynamic_pointer_cast<TreeGrid> ( morsegraph . phaseSpace () );
+
+  if ( not phase_space_chomp ) {
+    throw std::runtime_error ( "Cannot interface with chomp for this grid type!" );
+  }
+
+  typedef std::vector < Grid::GridElement > Subset;
+  for ( size_t v = 0; v < morsegraph . NumVertices (); ++ v) {
+    Subset subset = phase_space_chomp -> subset ( * morsegraph . grid ( v ) );
+    std::shared_ptr<chomp::ConleyIndex_t> conley ( new chomp::ConleyIndex_t );
+    morsegraph . conleyIndex ( v ) = conley;
+    ChompMap chomp_map ( map );
+    chomp::ConleyIndex ( conley . get (), *phase_space_chomp, subset, chomp_map );
+  }
+
+  // Compute multi-valued map digraph
+  MapGraph map_graph ( phase_space, map );
+
+  return std::make_pair ( morsegraph, map_graph );
+}
+
+std::pair<MorseGraph, MapGraph> ComputeMorseGraph ( Model const& model ) {
+  std::shared_ptr<const Map> map = model . map ();
+  MorseGraph morsegraph ( model . phaseSpace () );
+  std::shared_ptr < Grid > phase_space = morsegraph . phaseSpace ();
+
+  int phase_subdiv_init = model . phase_subdiv_init ();
+  int phase_subdiv_min = model . phase_subdiv_min ();
+  int phase_subdiv_max = model . phase_subdiv_max ();
+  int phase_subdiv_limit = model . phase_subdiv_limit ();
+
+  // Compute Morse graph
+  Compute_Morse_Graph ( & morsegraph, phase_space, map, phase_subdiv_init,
+                        phase_subdiv_min, phase_subdiv_max, phase_subdiv_limit );
 
   // Compute multi-valued map digraph
   MapGraph map_graph ( phase_space, map );
@@ -132,8 +166,6 @@ MorseGraph MorseGraphIntvalMap ( int phase_subdiv_min, int phase_subdiv_max,
   std::cout << "and reachability relation: ";
   std::cout << ": ";
 
-  // ConleyMorseGraph & conleymorsegraph = morsegraph;
-
   // Always output the Morse Graph
   // std::cout << "Creating graphviz .dot file...\n";
   // CreateDotFile ( "morsegraph.gv", conleymorsegraph );
@@ -184,8 +216,6 @@ MorseGraph MorseGraphMap ( int phase_subdiv_min, int phase_subdiv_max,
   std::cout << "and reachability relation: ";
   std::cout << ": ";
 
-  // ConleyMorseGraph & conleymorsegraph = morsegraph;
-
   // Always output the Morse Graph
   // std::cout << "Creating graphviz .dot file...\n";
   // CreateDotFile ( "morsegraph.gv", conleymorsegraph );
@@ -209,6 +239,7 @@ PYBIND11_MODULE(_cmgdb, m) {
 
   m.doc() = "Conley Morse Graph Database Module";
 
+  m.def("ComputeConleyMorseGraph", &ComputeConleyMorseGraph);
   m.def("ComputeMorseGraph", &ComputeMorseGraph);
   m.def("MorseGraphIntvalMap", &MorseGraphIntvalMap);
   m.def("MorseGraphMap", &MorseGraphMap);
