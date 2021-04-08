@@ -25,7 +25,7 @@ def PlotMorseGraph(morse_graph, cmap=matplotlib.cm.brg):
             """Return vertex label"""
             # Handle the case of annotations not present
             annotations = getattr(graph, 'annotations', [])
-            if annotations:
+            if annotations and len(annotations(v)):
                 return str(v) + ' : (' + ', '.join(annotations(v)) + ')'
             return str(v) # Just use index if no annotations
 
