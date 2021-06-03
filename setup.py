@@ -57,7 +57,7 @@ class CMakeBuild(build_ext):
 
 setup(
     name='CMGDB',
-    version='0.1.0',
+    version='v1.0.0',
     author='Marcio Gameiro',
     author_email='gameiro@math.rutgers.edu',
     description='CMGDB (Conley Morse Graph Database) Python Extension',
