@@ -1,10 +1,15 @@
+# PlotMorseSets.py
+# Marcio Gameiro
+# MIT LICENSE
+# 2022-05-28
+
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import CMGDB
 
-def PlotMorseSets(morse_sets, morse_nodes=None, proj_dims=None, cmap=matplotlib.cm.brg,
-                  fig_w=8, fig_h=8, xlim=None, ylim=None):
+def PlotMorseSets(morse_sets, morse_nodes=None, proj_dims=None, cmap=None,
+                  clist=None, fig_w=8, fig_h=8, xlim=None, ylim=None):
     # Check if morse_sets is a Morse graph, file name, or list
     if type(morse_sets) == CMGDB._cmgdb.MorseGraph: # Morse graph
         morse_graph = morse_sets
@@ -20,10 +25,13 @@ def PlotMorseSets(morse_sets, morse_nodes=None, proj_dims=None, cmap=matplotlib.
         num_morse_sets = None
     # Plot Morse set boxes as a scatter plot
     PlotBoxesScatter(morse_sets, num_morse_sets=num_morse_sets, morse_nodes=morse_nodes,
-                     proj_dims=proj_dims, cmap=cmap, fig_w=fig_w, fig_h=fig_h, xlim=xlim, ylim=ylim)
+                     proj_dims=proj_dims, cmap=cmap, clist=clist, fig_w=fig_w,
+                     fig_h=fig_h, xlim=xlim, ylim=ylim)
 
 def PlotBoxesScatter(morse_sets, num_morse_sets=None, morse_nodes=None, proj_dims=None,
-                     cmap=matplotlib.cm.brg, fig_w=8, fig_h=8, xlim=None, ylim=None):
+                     cmap=None, clist=None, fig_w=8, fig_h=8, xlim=None, ylim=None):
+    # Default colormap
+    default_cmap = matplotlib.cm.brg
     rect = morse_sets[0]
     assert len(rect) % 2 == 1, "Wrong dimension in Morse sets data"
     dim = int((len(rect) - 1) / 2)
@@ -38,6 +46,11 @@ def PlotBoxesScatter(morse_sets, num_morse_sets=None, morse_nodes=None, proj_dim
         num_morse_sets = max([int(rect[-1]) for rect in morse_sets]) + 1
     if morse_nodes == None:
         morse_nodes = range(num_morse_sets)
+    # Set colormap to use
+    if clist and cmap == None:
+        cmap = matplotlib.colors.ListedColormap(clist[:num_morse_sets], name='clist')
+    if cmap == None:
+        cmap = default_cmap
     if proj_dims == None:
         d1 = 0
         d2 = 1
@@ -92,7 +105,7 @@ def PlotBoxesScatter(morse_sets, num_morse_sets=None, morse_nodes=None, proj_dim
     for morse_node in morse_nodes:
         morse_set = [rect for rect in morse_sets if int(rect[-1]) == morse_node]
         # Use morse_node as color index for consistency if not plotting all
-        clr = matplotlib.colors.to_hex(cmap(cmap_norm(morse_node)))
+        clr = matplotlib.colors.to_hex(cmap(cmap_norm(morse_node)), keep_alpha=True)
         X = []; Y = []; S = []
         for rect in morse_set:
             p1 = [rect[d1], rect[d2]]                   # Lower point
@@ -109,6 +122,7 @@ def PlotBoxesScatter(morse_sets, num_morse_sets=None, morse_nodes=None, proj_dim
             # Use max of both sizes
             S.append(max(s_x, s_y))
         plt.scatter(X, Y, s=S, marker='s', c=clr)
+        # plt.scatter(X, Y, s=S, marker='s', c=clr, edgecolors=None)
         # plt.scatter(X, Y, s=S, marker='s', c=clr, alpha=0.5)
     # ax.set_aspect('equal')
     # plt.grid(True)
