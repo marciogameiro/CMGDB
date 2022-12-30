@@ -37,7 +37,7 @@ def BoxMap(f, rect, mode='corners', padding=False, num_pts=10):
     elif mode == 'random': # Compute at random point
         # Get lower and upper bounds
         lower_bounds = rect[:dim]
-        upper_nounds = rect[dim:]
+        upper_bounds = rect[dim:]
         X = SamplePoints(lower_bounds, upper_bounds, num_pts)
     else: # Unknown mode
         return []
