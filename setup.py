@@ -94,5 +94,5 @@ setup(
     zip_safe=False,
     url = 'https://github.com/marciogameiro/CMGDB',
     include_package_data = True,
-    install_requires=['matplotlib', 'numpy', 'graphviz']
+    install_requires=['numpy>=1.19', 'matplotlib>=3.3', 'graphviz>=0.16']
 )
