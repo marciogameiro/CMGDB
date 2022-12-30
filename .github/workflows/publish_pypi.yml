@@ -19,7 +19,7 @@ env:
 jobs:
   # Build wheels for macOS, Linux, and Windows
   build_wheels:
-    name: Wheel for ${{ matrix.os }}-cp${{ matrix.python }}
+    name: Wheel for ${{ matrix.os }}-cp${{ matrix.python }}-${{ matrix.platform_id }}
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -29,6 +29,7 @@ jobs:
         os: [macos-latest]
         # os: [windows-latest, ubuntu-latest, macos-latest]
         python: [38, 39, 310, 311]
+        platform_id: [macosx_x86_64, macosx_arm64]
 
     steps:
       - name: Checkout repository and submodules
@@ -43,7 +44,7 @@ jobs:
         run: |
           brew upgrade
           brew install boost
-          brew install eigen
+          # brew install eigen
           brew install gmp
           brew tap Brewsci/bio
           brew install sdsl-lite
@@ -58,6 +59,7 @@ jobs:
           python -m cibuildwheel --output-dir wheelhouse
         env:
           CIBW_BUILD: cp${{ matrix.python }}-*
+          CIBW_ARCHS: all
           # CIBW_ARCHS_LINUX: auto aarch64
           # CIBW_ARCHS_MACOS: x86_64 arm64
           # CIBW_ARCHS_MACOS: x86_64 universal2 arm64
