@@ -1,0 +1,138 @@
+# Build and publish Python distribution package to TestPyPI and PyPI
+name: Build and publish wheels
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - v* # Push events to v* tags
+  # pull_request:
+  #   branches:
+  #     - master
+  # Manual run
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  # Build wheels for macOS, Linux, and Windows
+  build_wheels:
+    name: Wheel for ${{ matrix.os }}-cp${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      # Build the other wheels even if one fails
+      fail-fast: false
+      matrix:
+        os: [macos-latest]
+        # os: [windows-latest, ubuntu-latest, macos-latest]
+        python: [39]
+        # python: [38, 39, 310, 311]
+
+    steps:
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+
+      # - name: Setup cmake
+      #   uses: jwlawson/actions-setup-cmake@v1.9
+      #   with:
+      #     cmake-version: '3.16.x'
+
+      - name: Install libraries for macOS
+        run: |
+          brew upgrade
+          brew install boost
+          brew install eigen
+          brew install gmp
+          brew tap Brewsci/bio
+          brew install sdsl-lite
+        shell: bash
+        if: runner.os == 'macOS'
+
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel
+
+      - name: Build wheel
+        run:
+          python -m cibuildwheel --output-dir wheelhouse
+        env:
+          CIBW_BUILD: cp${{ matrix.python }}-*
+
+      - name: Show files
+        run: ls -lh wheelhouse
+        shell: bash
+
+      - name: Verify clean directory
+        run: git diff --exit-code
+        shell: bash
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          path: wheelhouse/*.whl
+
+  # Build source distribution on Linux
+  build_sdist:
+    name: Build SDist
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v2
+      with:
+        submodules: true
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+
+    - name: Install dependencies
+      run: python -m pip install setuptools twine
+
+    - name: Build source tarball
+      run: python setup.py sdist
+
+    - name: Check metadata
+      run: twine check dist/*.tar.gz
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        path: dist/*.tar.gz
+
+  # Upload the wheels and the source distribution
+  upload_pypi:
+    name: Upload to TestPyPI and PyPI
+    needs: [build_wheels, build_sdist]
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Set up Python
+      uses: actions/setup-python@v2
+
+    - name: Download artifacts
+      uses: actions/download-artifact@v2
+      with:
+        name: artifact
+        path: dist
+
+    - name: Publish package to TestPyPI
+      uses: pypa/gh-action-pypi-publish@v1.4.1
+      with:
+        user: __token__
+        password: ${{ secrets.TEST_PYPI_TOKEN }}
+        repository_url: https://test.pypi.org/legacy/
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+
+    - name: Publish package to PyPI
+      uses: pypa/gh-action-pypi-publish@v1.4.1
+      with:
+        user: __token__
+        password: ${{ secrets.PYPI_TOKEN }}
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
