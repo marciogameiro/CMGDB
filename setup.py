@@ -8,60 +8,84 @@ from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 from distutils.version import LooseVersion
 
+# Convert distutils Windows platform specifiers to CMake -A arguments
+PLAT_TO_CMAKE = {
+    "win32": "Win32",
+    "win-amd64": "x64",
+    "win-arm32": "ARM",
+    "win-arm64": "ARM64",
+}
+
 class CMakeExtension(Extension):
     def __init__(self, name, sourcedir=''):
         Extension.__init__(self, name, sources=[])
         self.sourcedir = os.path.abspath(sourcedir)
 
 class CMakeBuild(build_ext):
-    def run(self):
-        try:
-            out = subprocess.check_output(['cmake', '--version'])
-        except OSError:
-            raise RuntimeError("CMake must be installed to build the following extensions: " +
-                               ", ".join(e.name for e in self.extensions))
-
-        if platform.system() == "Windows":
-            cmake_version = LooseVersion(re.search(r'version\s*([\d.]+)', out.decode()).group(1))
-            if cmake_version < '3.1.0':
-                raise RuntimeError("CMake >= 3.1.0 is required on Windows")
-
-        for ext in self.extensions:
-            self.build_extension(ext)
-
     def build_extension(self, ext):
         extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
-        cmake_args = ['-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=' + extdir,
-                      '-DPYTHON_EXECUTABLE=' + sys.executable,
-                      '-DUSER_INCLUDE_PATH=./src/CMGDB/_cmgdb/include']
+
+        # Required for auto-detection of auxiliary "native" libs
+        if not extdir.endswith(os.path.sep):
+            extdir += os.path.sep
 
         cfg = 'Debug' if self.debug else 'Release'
+
+        # Get generator info (CMake lets you override generator)
+        cmake_generator = os.environ.get("CMAKE_GENERATOR", "")
+
+        cmake_args = [
+            "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={}".format(extdir),
+            "-DPYTHON_EXECUTABLE={}".format(sys.executable),
+            "-DEXAMPLE_VERSION_INFO={}".format(self.distribution.get_version()),
+            "-DCMAKE_BUILD_TYPE={}".format(cfg),  # Not used on MSVC
+            "-DUSER_INCLUDE_PATH=./src/CMGDB/_cmgdb/include"
+        ]
+
         build_args = ['--config', cfg]
 
-        if platform.system() == "Windows":
-            cmake_args += ['-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_{}={}'.format(cfg.upper(), extdir)]
-            if sys.maxsize > 2**32:
-                cmake_args += ['-A', 'x64']
-            build_args += ['--', '/m']
-        else:
-            cmake_args += ['-DCMAKE_BUILD_TYPE=' + cfg]
-            build_args += ['--', '-j2']
+        if self.compiler.compiler_type == "msvc":
+            # Single config generators are handled normally
+            single_config = any(x in cmake_generator for x in {"NMake", "Ninja"})
+
+            # CMake allows an arch-in-generator style for backward compatibility
+            contains_arch = any(x in cmake_generator for x in {"ARM", "Win64"})
+
+            # Specify the arch if using MSVC generator, but only if it doesn't
+            # contain a backward-compatibility arch spec in the generator name
+            if not single_config and not contains_arch:
+                cmake_args += ["-A", PLAT_TO_CMAKE[self.plat_name]]
+
+            # Multi-config generators have a different way to specify configs
+            if not single_config:
+                cmake_args += [
+                    "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_{}={}".format(cfg.upper(), extdir)
+                ]
+                build_args += ["--config", cfg]
+
+        if not os.path.exists(self.build_temp):
+            os.makedirs(self.build_temp)
 
         env = os.environ.copy()
         env['CXXFLAGS'] = '{} -DVERSION_INFO=\\"{}\\"'.format(env.get('CXXFLAGS', ''),
                                                               self.distribution.get_version())
-        if not os.path.exists(self.build_temp):
-            os.makedirs(self.build_temp)
+
         subprocess.check_call(['cmake', ext.sourcedir] + cmake_args, cwd=self.build_temp, env=env)
         subprocess.check_call(['cmake', '--build', '.'] + build_args, cwd=self.build_temp)
+
+# Read the contents of README.md file
+this_directory = os.path.abspath(os.path.dirname(__file__))
+with open(os.path.join(this_directory, 'README.md'), encoding='utf-8') as f:
+    long_description = f.read()
 
 setup(
     name='CMGDB',
     version='v1.0.0',
     author='Marcio Gameiro',
-    author_email='gameiro@math.rutgers.edu',
+    author_email='marciogameiro@gmail.com',
     description='CMGDB (Conley Morse Graph Database) Python Extension',
-    long_description='',
+    long_description=long_description,
+    long_description_content_type='text/markdown',
     package_dir = {'': 'src'},
     ext_package='CMGDB',
     ext_modules=[CMakeExtension('_cmgdb')],
@@ -69,6 +93,6 @@ setup(
     cmdclass=dict(build_ext=CMakeBuild),
     zip_safe=False,
     url = 'https://github.com/marciogameiro/CMGDB',
-    download_url = '',
-    install_requires=[]
+    include_package_data = True,
+    install_requires=['matplotlib', 'numpy', 'graphviz']
 )
