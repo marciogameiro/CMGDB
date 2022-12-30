@@ -28,8 +28,7 @@ jobs:
       matrix:
         os: [macos-latest]
         # os: [windows-latest, ubuntu-latest, macos-latest]
-        python: [39]
-        # python: [38, 39, 310, 311]
+        python: [38, 39, 310, 311]
 
     steps:
       - name: Checkout repository and submodules
@@ -39,11 +38,6 @@ jobs:
 
       - name: Set up Python
         uses: actions/setup-python@v2
-
-      # - name: Setup cmake
-      #   uses: jwlawson/actions-setup-cmake@v1.9
-      #   with:
-      #     cmake-version: '3.16.x'
 
       - name: Install libraries for macOS
         run: |
@@ -64,6 +58,8 @@ jobs:
           python -m cibuildwheel --output-dir wheelhouse
         env:
           CIBW_BUILD: cp${{ matrix.python }}-*
+          # CIBW_ARCHS_LINUX: auto aarch64
+          CIBW_ARCHS_MACOS: x86_64 universal2 arm64
 
       - name: Show files
         run: ls -lh wheelhouse
