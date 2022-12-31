@@ -19,7 +19,8 @@ env:
 jobs:
   # Build wheels for macOS, Linux, and Windows
   build_wheels:
-    name: Wheel for ${{ matrix.os }}-cp${{ matrix.python }}-${{ matrix.cibw_archs }}
+    name: Wheel for ${{ matrix.os }}-cp${{ matrix.python }}
+    # name: Wheel for ${{ matrix.os }}-cp${{ matrix.python }}-${{ matrix.cibw_archs }}
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -30,7 +31,7 @@ jobs:
         # os: [windows-latest, ubuntu-latest, macos-latest]
         python: [38, 39]
         # python: [38, 39, 310, 311]
-        cibw_archs: ["auto"]
+        # cibw_archs: ["auto"]
 
     steps:
       - name: Checkout repository and submodules
@@ -63,9 +64,10 @@ jobs:
           # CIBW_ARCHS: all
           # CIBW_ARCHS_LINUX: auto aarch64
           # CIBW_ARCHS_MACOS: x86_64 arm64
+          CIBW_ARCHS_MACOS: x86_64 universal2
           # CIBW_ARCHS_MACOS: x86_64 arm64
           # CIBW_ARCHS_MACOS: x86_64 universal2 arm64
-          CIBW_ARCHS: ${{ matrix.cibw_archs }}
+          # CIBW_ARCHS: ${{ matrix.cibw_archs }}
 
       - name: Show files
         run: ls -lh wheelhouse
