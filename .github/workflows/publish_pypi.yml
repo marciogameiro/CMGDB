@@ -29,8 +29,7 @@ jobs:
       matrix:
         os: [macos-latest]
         # os: [windows-latest, ubuntu-latest, macos-latest]
-        python: [38, 39]
-        # python: [38, 39, 310, 311]
+        python: [38, 39, 310, 311]
         # cibw_archs: ["auto"]
 
     steps:
@@ -52,12 +51,13 @@ jobs:
         shell: bash
         if: runner.os == 'macOS'
 
-      - name: Install cibuildwheel
-        run: python -m pip install cibuildwheel
+      # - name: Install cibuildwheel
+      #   run: python -m pip install cibuildwheel
 
-      - name: Build wheel
-        run:
-          python -m cibuildwheel --output-dir wheelhouse
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v1.12.0
+        # run:
+        #   python -m cibuildwheel --output-dir wheelhouse
         env:
 #          CIBW_BUILD: cp${{ matrix.python }}-${{ matrix.platform_id }}
           CIBW_BUILD: cp${{ matrix.python }}-*
