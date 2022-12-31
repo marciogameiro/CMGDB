@@ -28,7 +28,8 @@ jobs:
       matrix:
         os: [macos-latest]
         # os: [windows-latest, ubuntu-latest, macos-latest]
-        python: [38, 39, 310, 311]
+        python: [38]
+        # python: [38, 39, 310, 311]
         platform_id: [macosx_x86_64, macosx_arm64]
 
     steps:
@@ -58,7 +59,8 @@ jobs:
         run:
           python -m cibuildwheel --output-dir wheelhouse
         env:
-          CIBW_BUILD: cp${{ matrix.python }}-*
+          CIBW_BUILD: cp${{ matrix.python }}-${{ matrix.platform_id }}
+          # CIBW_BUILD: cp${{ matrix.python }}-*
           # CIBW_ARCHS_LINUX: auto aarch64
           # CIBW_ARCHS_MACOS: x86_64 arm64
           # CIBW_ARCHS_MACOS: x86_64 universal2 arm64
