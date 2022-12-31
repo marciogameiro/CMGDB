@@ -61,8 +61,10 @@ jobs:
         env:
           CIBW_BUILD: cp${{ matrix.python }}-${{ matrix.platform_id }}
           # CIBW_BUILD: cp${{ matrix.python }}-*
+          # CIBW_ARCHS: all
           # CIBW_ARCHS_LINUX: auto aarch64
           # CIBW_ARCHS_MACOS: x86_64 arm64
+          CIBW_ARCHS_MACOS: x86_64 arm64
           # CIBW_ARCHS_MACOS: x86_64 universal2 arm64
 
       - name: Show files
