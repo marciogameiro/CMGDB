@@ -1,15 +1,16 @@
 # PlotMorseSets.py
 # Marcio Gameiro
 # MIT LICENSE
-# 2022-05-28
+# 2023-07-15
 
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import CMGDB
 
-def PlotMorseSets(morse_sets, morse_nodes=None, proj_dims=None, cmap=None,
-                  clist=None, fig_w=8, fig_h=8, xlim=None, ylim=None):
+def PlotMorseSets(morse_sets, morse_nodes=None, proj_dims=None, cmap=None, clist=None,
+                  fig_w=8, fig_h=8, xlim=None, ylim=None, axis_labels=True,
+                  xlabel='$x$', ylabel='$y$', fontsize=15, fig_fname=None, dpi=300):
     # Check if morse_sets is a Morse graph, file name, or list
     if type(morse_sets) == CMGDB._cmgdb.MorseGraph: # Morse graph
         morse_graph = morse_sets
@@ -25,11 +26,13 @@ def PlotMorseSets(morse_sets, morse_nodes=None, proj_dims=None, cmap=None,
         num_morse_sets = None
     # Plot Morse set boxes as a scatter plot
     PlotBoxesScatter(morse_sets, num_morse_sets=num_morse_sets, morse_nodes=morse_nodes,
-                     proj_dims=proj_dims, cmap=cmap, clist=clist, fig_w=fig_w,
-                     fig_h=fig_h, xlim=xlim, ylim=ylim)
+                     proj_dims=proj_dims, cmap=cmap, clist=clist, fig_w=fig_w, fig_h=fig_h,
+                     xlim=xlim, ylim=ylim, axis_labels=axis_labels, xlabel=xlabel,
+                     ylabel=ylabel, fontsize=fontsize, fig_fname=fig_fname, dpi=dpi)
 
-def PlotBoxesScatter(morse_sets, num_morse_sets=None, morse_nodes=None, proj_dims=None,
-                     cmap=None, clist=None, fig_w=8, fig_h=8, xlim=None, ylim=None):
+def PlotBoxesScatter(morse_sets, num_morse_sets=None, morse_nodes=None, proj_dims=None, cmap=None,
+                     clist=None, fig_w=8, fig_h=8, xlim=None, ylim=None, axis_labels=True,
+                     xlabel='$x$', ylabel='$y$', fontsize=15, fig_fname=None, dpi=300):
     # Default colormap
     default_cmap = matplotlib.cm.brg
     rect = morse_sets[0]
@@ -121,9 +124,17 @@ def PlotBoxesScatter(morse_sets, num_morse_sets=None, morse_nodes=None, proj_dim
             Y.append(p[1])
             # Use max of both sizes
             S.append(max(s_x, s_y))
-        plt.scatter(X, Y, s=S, marker='s', c=clr)
-        # plt.scatter(X, Y, s=S, marker='s', c=clr, edgecolors=None)
-        # plt.scatter(X, Y, s=S, marker='s', c=clr, alpha=0.5)
+        ax.scatter(X, Y, s=S, marker='s', c=clr)
+        # ax.scatter(X, Y, s=S, marker='s', c=clr, edgecolors=None)
+        # ax.scatter(X, Y, s=S, marker='s', c=clr, alpha=0.5)
+    # Add axis labels
+    if axis_labels:
+        ax.set_xlabel(xlabel, fontsize=fontsize)
+        ax.set_ylabel(ylabel, fontsize=fontsize)
+    # Set tick labels size
+    ax.tick_params(labelsize=fontsize)
     # ax.set_aspect('equal')
     # plt.grid(True)
+    if fig_fname:
+        fig.savefig(fig_fname, dpi=dpi, bbox_inches='tight')
     plt.show()
