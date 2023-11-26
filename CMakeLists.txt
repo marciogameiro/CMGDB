@@ -8,7 +8,7 @@ cmake_policy(SET CMP0127 NEW)
 
 # Visual Studio C++ does not support keywords such
 # as "and", "not", etc. Settting the /permissive-
-# flag for the compiler makes it suppor them.
+# flag for the compiler makes it support them.
 if(MSVC)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /permissive-")
 endif()
@@ -34,9 +34,4 @@ link_directories (
 
 pybind11_add_module(_cmgdb src/CMGDB/_cmgdb/CMGDB.cpp)
 
-target_link_libraries (
-  _cmgdb PRIVATE
-  Boost::chrono
-  Boost::thread
-  Boost::serialization
-  sdsl )
+target_link_libraries (_cmgdb PRIVATE Boost::chrono Boost::thread Boost::serialization sdsl)

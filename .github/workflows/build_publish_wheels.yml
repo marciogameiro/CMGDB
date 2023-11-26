@@ -1,0 +1,257 @@
+# Build and publish Python distribution package to TestPyPI and PyPI
+name: Build and publish wheels
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - v* # Push events to v* tags
+  # pull_request:
+  #   branches:
+  #     - master
+  # Manual run
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  # Build wheels for Linux, macOS, and Windows
+  build_wheels:
+    name: Wheel for ${{ matrix.buildplat[0] }}-${{ matrix.python }}-${{ matrix.buildplat[2] }}
+    runs-on: ${{ matrix.buildplat[0] }}
+
+    strategy:
+      # Build the other wheels even if one fails
+      fail-fast: false
+      matrix:
+        # Build wheels for CPython and PyPy when available
+        buildplat:
+          - [ubuntu-latest,  x86_64,  manylinux_x86_64 ]
+          - [ubuntu-latest,  aarch64, manylinux_aarch64]
+          - [ubuntu-latest,  i686,    manylinux_i686   ]
+          - [ubuntu-latest,  x86_64,  musllinux_x86_64 ]
+          - [ubuntu-latest,  aarch64, musllinux_aarch64]
+          - [ubuntu-latest,  i686,    musllinux_i686   ]
+          - [macos-latest,   x86_64,  macosx_x86_64    ]
+          - [macos-latest,   arm64,   macosx_arm64     ]
+          # Building wheels not working on Windows for now
+          # - [windows-latest, AMD64,   win_amd64        ]
+          # - [windows-latest, ARM64,   win_arm64        ]
+          # - [windows-latest, x86,     win32            ]
+        python: [cp*, pp*]
+        # The excludes below need to be adjusted for different choices of Python
+        # python: [cp310, pp39]
+        # python: [cp3{9,11}, pp3{9,10}]
+        # python: [cp36, cp37, cp38, cp39, cp310, cp311, cp312, pp37, pp38, pp39, pp310]
+        exclude:
+          # PyPy not available for musllinux and Windows ARM64 and win32
+          - buildplat: [ubuntu-latest,  x86_64,  musllinux_x86_64 ]
+            python: pp*
+          - buildplat: [ubuntu-latest,  aarch64, musllinux_aarch64]
+            python: pp*
+          - buildplat: [ubuntu-latest,  i686,    musllinux_i686   ]
+            python: pp*
+          # - buildplat: [windows-latest, ARM64,   win_arm64        ]
+          #   python: pp*
+          # - buildplat: [windows-latest, x86,     win32            ]
+          #   python: pp*
+          # PyPy cross-compilation not supported (need to run on Apple Silicon)
+          - buildplat: [macos-latest,   arm64,   macosx_arm64     ]
+            python: pp*
+        include:
+          # Configuration flags for Install Boost action
+          - buildplat: [macos-latest,   x86_64,  macosx_x86_64    ]
+            platform_version: 11
+            link: static+shared
+            toolset: clang
+          - buildplat: [macos-latest,   arm64,   macosx_arm64     ]
+            platform_version: 11
+            link: static+shared
+            toolset: clang
+          # - buildplat: [windows-latest, AMD64,   win_amd64        ]
+          #   platform_version: 2022
+          #   link: static
+          #   toolset: msvc
+          # - buildplat: [ubuntu-latest,  x86_64,  manylinux_x86_64 ]
+          #   platform_version: 22.04
+          #   link: static+shared
+          #   toolset: gcc
+
+    steps:
+      - name: Set up QEMU
+        if: matrix.buildplat[1] == 'aarch64'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up Python for Windows
+        if: runner.os == 'Windows'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install boost for Windows and macOS
+        if: runner.os != 'Linux'
+        uses: MarkusJx/install-boost@v2.4.4
+        id: install-boost
+        with:
+          boost_version: 1.80.0
+          platform_version: ${{ matrix.platform_version }}
+          link: ${{ matrix.link }}
+          toolset: ${{ matrix.toolset }}
+          arch: x86
+
+      - name: Install libraries for macOS
+        if: runner.os == 'macOS'
+        run: |
+          brew upgrade
+          # brew install boost
+          brew install gmp
+          brew tap Brewsci/bio
+          brew install sdsl-lite
+        shell: bash
+
+      - name: Install libraries for Windows
+        if: runner.os == 'Windows'
+        run: |
+          vcpkg install gmp
+          git clone https://github.com/marciogameiro/sdsl-lite.git
+          cd sdsl-lite
+          ./install.sh
+        shell: pwsh
+
+      # Build all wheels except for Linux musllinux
+      - name: Build wheels for ${{ matrix.buildplat[0] }}-${{ matrix.buildplat[2] }}
+        if: startsWith(matrix.buildplat[2], 'musllinux') != true
+        uses: pypa/cibuildwheel@v2.16.2
+        env:
+          CIBW_BUILD: ${{ matrix.python }}-${{ matrix.buildplat[2] }}
+          CIBW_ARCHS: ${{ matrix.buildplat[1] }}
+          # CIBW_ARCHS_LINUX: x86_64
+          # CIBW_ARCHS_MACOS: x86_64 arm64
+          # CIBW_ARCHS_WINDOWS: AMD64
+          BOOST_ROOT: ${{ steps.install-boost.outputs.BOOST_ROOT }}
+          # Boost_INCLUDE_DIR: ${{ steps.install-boost.outputs.BOOST_ROOT }}/include
+          # Boost_LIBRARY_DIRS: ${{ steps.install-boost.outputs.BOOST_ROOT }}/lib
+          # CIBW_ENVIRONMENT: BOOST_ROOT='${{ steps.install-boost.outputs.BOOST_ROOT }}'
+          CIBW_ENVIRONMENT_WINDOWS: BOOST_ROOT='${{ steps.install-boost.outputs.BOOST_ROOT }}'
+          CIBW_ENVIRONMENT_MACOS: BOOST_ROOT='${{ steps.install-boost.outputs.BOOST_ROOT }}'
+          # CIBW_ENVIRONMENT_LINUX: BOOST_ROOT='${{ steps.install-boost.outputs.BOOST_ROOT }}'
+          CIBW_BEFORE_ALL_LINUX: >
+            curl -L -o boost_1_80_0.tar.bz2 https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.bz2 &&
+            tar --bzip2 -xf boost_1_80_0.tar.bz2 && cd boost_1_80_0 && ./bootstrap.sh --prefix=/usr/local &&
+            ./b2 install -d0 -j4 --with-chrono --with-thread --with-serialization --with-date_time --with-atomic &&
+            ls -l /usr/local &&
+            yum install -y gmp-devel &&
+            git clone https://github.com/marciogameiro/sdsl-lite.git &&
+            cd sdsl-lite && export CFLAGS=-fPIC && export CXXFLAGS=-fPIC &&
+            ./install.sh /usr/local
+            # yum install boost-devel
+            # curl -L -o boost_1_80_0.tar.gz https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.gz
+            # tar -xzf boost_1_80_0.tar.gz
+          CIBW_BEFORE_BUILD_WINDOWS: pip install delvewheel
+          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: delvewheel repair -w {dest_dir} {wheel}
+        with:
+          output-dir: wheelhouse
+
+      # Build wheels for Linux musllinux
+      - name: Build wheels for ${{ matrix.buildplat[0] }}-${{ matrix.buildplat[2] }}
+        if: startsWith(matrix.buildplat[2], 'musllinux')
+        uses: pypa/cibuildwheel@v2.16.2
+        env:
+          CIBW_BUILD: ${{ matrix.python }}-${{ matrix.buildplat[2] }}
+          CIBW_ARCHS: ${{ matrix.buildplat[1] }}
+          CIBW_BEFORE_ALL_LINUX: >
+            curl -L -o boost_1_80_0.tar.bz2 https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.bz2 &&
+            tar --bzip2 -xf boost_1_80_0.tar.bz2 && cd boost_1_80_0 && ./bootstrap.sh --prefix=/usr/local &&
+            ./b2 install -d0 -j4 --with-chrono --with-thread --with-serialization --with-date_time --with-atomic &&
+            ls -l /usr/local &&
+            apk add gmp-dev &&
+            git clone https://github.com/simongog/sdsl-lite.git &&
+            cd sdsl-lite && export CFLAGS=-fPIC && export CXXFLAGS=-fPIC &&
+            ./install.sh /usr/local
+        with:
+          output-dir: wheelhouse
+
+      - name: Show files
+        run: ls -lh wheelhouse
+        shell: bash
+
+      - name: Verify clean directory
+        run: git diff --exit-code
+        shell: bash
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          path: wheelhouse/*.whl
+
+  # Build source distribution on Linux
+  build_sdist:
+    name: Build SDist
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v4
+      with:
+        submodules: true
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+
+    - name: Install dependencies
+      run: python -m pip install setuptools twine
+
+    - name: Build source tarball
+      run: python setup.py sdist
+
+    - name: Check metadata
+      run: twine check dist/*.tar.gz
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        path: dist/*.tar.gz
+
+  # Upload the wheels and the source distribution
+  upload_pypi:
+    name: Upload to TestPyPI and PyPI
+    needs: [build_wheels, build_sdist]
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+
+    - name: Download artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: artifact
+        path: dist
+
+    - name: Publish package to TestPyPI
+      uses: pypa/gh-action-pypi-publish@v1.8.10
+      with:
+        user: __token__
+        password: ${{ secrets.TEST_PYPI_TOKEN }}
+        repository_url: https://test.pypi.org/legacy/
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+
+    - name: Publish package to PyPI
+      uses: pypa/gh-action-pypi-publish@v1.8.10
+      with:
+        user: __token__
+        password: ${{ secrets.PYPI_TOKEN }}
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
