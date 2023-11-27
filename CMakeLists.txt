@@ -34,4 +34,4 @@ link_directories (
 
 pybind11_add_module(_cmgdb src/CMGDB/_cmgdb/CMGDB.cpp)
 
-target_link_libraries (_cmgdb PRIVATE Boost::chrono Boost::thread Boost::serialization sdsl)
+target_link_libraries(_cmgdb PRIVATE Boost::chrono Boost::thread Boost::serialization sdsl)
