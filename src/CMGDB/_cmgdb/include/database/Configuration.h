@@ -10,7 +10,7 @@
 #include <boost/serialization/string.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
-#include <unistd.h>
+// #include <unistd.h>
 #include <fstream>
 #include "RectGeo.h"
 
@@ -94,12 +94,15 @@ public:
     std::string filestring ( filename );
     std::string appendstring ( "/config.xml" );
     std::string loadstring = filestring + appendstring;
-    char current [ 100 ];
-    getcwd ( current, 100 );
+    // Does not work on Windows
+    // char current [ 100 ];
+    // getcwd ( current, 100 );
+    // filesystem::current_path needs C++17
+    // std::string current = std::filesystem::current_path();
     std::ifstream input(loadstring.c_str());
     if ( not input . good () ) {
       std::cout << "Problem loading configuration file.\n";
-      std::cout << "Current directory:\n" << current << "\n";
+      // std::cout << "Current directory:\n" << current << "\n";
       std::cout << "Attempted to load from file:\n " << loadstring << "\n";      
       throw std::runtime_error ( "Unable to load configuration file.\n" );
     }

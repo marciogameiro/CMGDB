@@ -21,6 +21,33 @@
 #include "chomp/Rect.h"
 #include "chomp/Prism.h"
 
+// Define popcount for Windows
+// Use the naive solution for now (below are other possible options)
+// https://graphics.stanford.edu/~seander/bithacks.html#CountBitsSetKernighan
+// The builtin function seems to be just about twice as fast on average
+#if defined(_WIN32) || defined(_WIN64)
+int __builtin_popcount ( uint64_t x ) {
+  // Count the number of set bits in x
+  unsigned int c; // c accumulates the total set bits in x
+  for ( c = 0; x; c++ ) {
+    x &= x - 1; // clear the least significant set bit
+  }
+  return c;
+}
+#endif
+
+// This needs C++20
+// #if defined(_WIN32) || defined(_WIN64)
+//   #include <bit>
+//   #define __builtin_popcount std::popcount
+// #endif
+
+// Using the MSVC provided method
+// #ifdef _MSC_VER
+//   #include <intrin.h>
+//   #define __builtin_popcount __popcnt64
+// #endif
+
 namespace chomp {
 
   /*******************************
