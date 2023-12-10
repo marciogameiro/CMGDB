@@ -1,4 +1,5 @@
 # Build and publish Python distribution package to TestPyPI and PyPI
+# Trigger build only when a tag is pushed
 name: Build and publish wheels
 
 on:
@@ -36,8 +37,8 @@ jobs:
           - [ubuntu-latest,  i686,    musllinux_i686   ]
           - [macos-latest,   x86_64,  macosx_x86_64    ]
           - [macos-latest,   arm64,   macosx_arm64     ]
-          # Building wheels not working on Windows for now
-          # - [windows-latest, AMD64,   win_amd64        ]
+          - [windows-latest, AMD64,   win_amd64        ]
+          # Not working on win_arm64 and win32 for now
           # - [windows-latest, ARM64,   win_arm64        ]
           # - [windows-latest, x86,     win32            ]
         python: [cp*, pp*]
@@ -93,8 +94,10 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install boost for Windows Intel and macOS Intel
-        if: matrix.buildplat[2] == 'macosx_x86_64' || matrix.buildplat[2] == 'win_amd64'
+      - name: Install boost for macOS Intel
+      # - name: Install boost for Windows Intel and macOS Intel
+        if: matrix.buildplat[2] == 'macosx_x86_64'
+        # if: matrix.buildplat[2] == 'macosx_x86_64' || matrix.buildplat[2] == 'win_amd64'
         uses: MarkusJx/install-boost@v2.4.4
         id: install-boost
         with:
@@ -108,30 +111,50 @@ jobs:
         if: matrix.buildplat[2] == 'macosx_arm64'
         id: install-boost-macos-arm
         run: |
-          BOOSTROOT="/Users/runner"
+          INSTALL_PREFIX="/Users/runner"
           curl -L -o boost_1_80_0.tar.bz2 https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.bz2
           tar --bzip2 -xf boost_1_80_0.tar.bz2
           cd boost_1_80_0
-          ./bootstrap.sh --prefix=${BOOSTROOT}
+          ./bootstrap.sh --prefix=${INSTALL_PREFIX}
           ./b2 install -d0 -j4 architecture=arm cxxflags="-arch arm64" --with-chrono --with-thread --with-serialization --with-date_time --with-atomic
-          echo "BOOST_ROOT=${BOOSTROOT}" >> "$GITHUB_OUTPUT"
+          echo "BOOST_ROOT=${INSTALL_PREFIX}" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Install Boost for Windows
+        if: runner.os == 'Windows'
+        id: install-boost-windows
+        run: |
+          INSTALL_PREFIX="C:/boost"
+          curl -L -o boost_1_80_0.tar.bz2 https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.bz2
+          tar --bzip2 -xf boost_1_80_0.tar.bz2
+          cd boost_1_80_0
+          ./bootstrap.sh --prefix=${INSTALL_PREFIX}
+          # ./b2 install -d0 -j4 toolset=msvc address-model=32,64 variant=release link=static runtime-link=static --with-chrono --with-thread --with-serialization --with-date_time --with-atomic
+          # ./b2 install -d0 -j4 toolset=msvc variant=release link=static runtime-link=static --with-chrono --with-thread --with-serialization --with-date_time --with-atomic
+          ./b2 install -d0 -j4 toolset=msvc link=static runtime-link=static --with-chrono --with-thread --with-serialization --with-date_time --with-atomic
+          # Install Boost with vcpkg
+          # vcpkg install boost-chrono boost-thread boost-serialization --triplet x64-windows
+          # Boost_INCLUDE_DIRS is C:/vcpkg/installed/x64-windows/include
+          # Boost_LIBRARY_DIRS is C:/vcpkg/installed/x64-windows/lib
+          # vcpkg install boost-chrono boost-thread boost-serialization --triplet x64-windows-static
+          # Boost_INCLUDE_DIRS is C:/vcpkg/installed/x64-windows-static/include
+          # Boost_LIBRARY_DIRS is C:/vcpkg/installed/x64-windows-static/lib
+          echo "BOOST_ROOT=${INSTALL_PREFIX}" >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Set BOOST_ROOT
         id: set-boost-root
         run: |
-          if [ "${{ matrix.buildplat[2] }}" = "macosx_x86_64" ] || [ "${{ matrix.buildplat[2] }}" = "win_amd64" ]; then
-            echo "BOOST_ROOT=${{ steps.install-boost.outputs.BOOST_ROOT }}" >> "$GITHUB_OUTPUT"
+          # if [ "${{ matrix.buildplat[2] }}" = "macosx_x86_64" ] || [ "${{ matrix.buildplat[2] }}" = "win_amd64" ]; then
+          if [ "${{ matrix.buildplat[2] }}" = "macosx_x86_64" ]; then
+            echo "BOOST_ROOT=${{ steps.install-boost.outputs.BOOST_ROOT }}" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.buildplat[2] }}" = "win_amd64" ]; then
+            echo "BOOST_ROOT=${{ steps.install-boost-windows.outputs.BOOST_ROOT }}" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.buildplat[2] }}" = "macosx_arm64" ]; then
-            echo "BOOST_ROOT=${{ steps.install-boost-macos-arm.outputs.BOOST_ROOT }}" >> "$GITHUB_OUTPUT"
+            echo "BOOST_ROOT=${{ steps.install-boost-macos-arm.outputs.BOOST_ROOT }}" >> $GITHUB_OUTPUT
           else
-            echo "BOOST_ROOT=" >> "$GITHUB_OUTPUT"
+            echo "BOOST_ROOT=" >> $GITHUB_OUTPUT
           fi
-        shell: bash
-
-      - name: Print BOOST_ROOT
-        run: |
-          echo ${{ steps.set-boost-root.outputs.BOOST_ROOT }}
         shell: bash
 
       - name: Install libraries for macOS
@@ -144,32 +167,61 @@ jobs:
           brew install sdsl-lite
         shell: bash
 
-      - name: Install libraries for Windows
+      - name: Add msbuild to PATH
         if: runner.os == 'Windows'
+        uses: microsoft/setup-msbuild@v1.1
+
+      - name: Install GMP for Windows
+        if: runner.os == 'Windows'
+        id: install-gmp-windows
         run: |
           vcpkg install gmp
+          # INCLUDE_DIR is C:/vcpkg/installed/x64-windows/include
+          # LIBRARY_DIR is C:/vcpkg/installed/x64-windows/lib
+          echo "GMP_ROOT=C:/vcpkg/installed/x64-windows" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Install sdsl-lite for Windows
+        if: runner.os == 'Windows'
+        id: install-sdsl-lite-windows
+        run: |
+          # The library is being installed into the cloned directory regardless
+          # of INSTALL_PREFIX (INSTALL_PREFIX does not seem to be working).
+          # The INSTALL_PREFIX below sets the correct SDSL_ROOT directory
+          INSTALL_PREFIX='$GITHUB_WORKSPACE/sdsl-lite'
+          # INSTALL_PREFIX='C:/sdsl-lite'
           git clone https://github.com/marciogameiro/sdsl-lite.git
           cd sdsl-lite
-          ./install.sh
-        shell: pwsh
+          ./install.bat
+          # ./install.bat ${INSTALL_PREFIX}
+          echo "SDSL_ROOT='${INSTALL_PREFIX}'/build" >> $GITHUB_OUTPUT
+        shell: bash
 
-      # Build all wheels except for Linux musllinux
-      - name: Build wheels for ${{ matrix.buildplat[0] }}-${{ matrix.buildplat[2] }}
+      - name: Show library root directories
+        run: |
+          echo "BOOST_ROOT is " ${{ steps.set-boost-root.outputs.BOOST_ROOT }}
+          echo "GMP_ROOT is " ${{ steps.install-gmp-windows.outputs.GMP_ROOT }}
+          echo "SDSL_ROOT is " '${{ steps.install-sdsl-lite-windows.outputs.SDSL_ROOT }}'
+        shell: bash
+
+      - name: Build all wheels except for musllinux
         if: startsWith(matrix.buildplat[2], 'musllinux') != true
         uses: pypa/cibuildwheel@v2.16.2
         env:
           CIBW_BUILD: ${{ matrix.python }}-${{ matrix.buildplat[2] }}
+          # Skip CPython 3.6 on Windows
+          CIBW_SKIP: cp36-win*
           CIBW_ARCHS: ${{ matrix.buildplat[1] }}
           # CIBW_ARCHS_LINUX: x86_64
           # CIBW_ARCHS_MACOS: x86_64 arm64
           # CIBW_ARCHS_WINDOWS: AMD64
-          BOOST_ROOT: ${{ steps.set-boost-root.outputs.BOOST_ROOT }}
-          # Boost_INCLUDE_DIR: ${{ steps.install-boost.outputs.BOOST_ROOT }}/include
-          # Boost_LIBRARY_DIRS: ${{ steps.install-boost.outputs.BOOST_ROOT }}/lib
-          # CIBW_ENVIRONMENT: BOOST_ROOT='${{ steps.install-boost.outputs.BOOST_ROOT }}'
-          CIBW_ENVIRONMENT_WINDOWS: BOOST_ROOT='${{ steps.install-boost.outputs.BOOST_ROOT }}'
-          CIBW_ENVIRONMENT_MACOS: BOOST_ROOT='${{ steps.install-boost.outputs.BOOST_ROOT }}'
-          # CIBW_ENVIRONMENT_LINUX: BOOST_ROOT='${{ steps.install-boost.outputs.BOOST_ROOT }}'
+          # CIBW_ENVIRONMENT: BOOST_ROOT=${{ steps.set-boost-root.outputs.BOOST_ROOT }}
+          CIBW_ENVIRONMENT_WINDOWS: >
+            BOOST_ROOT=${{ steps.set-boost-root.outputs.BOOST_ROOT }}
+            SDSL_ROOT=${{ steps.install-sdsl-lite-windows.outputs.SDSL_ROOT }}
+            GMP_ROOT=${{ steps.install-gmp-windows.outputs.GMP_ROOT }}
+          CIBW_ENVIRONMENT_MACOS: BOOST_ROOT=${{ steps.set-boost-root.outputs.BOOST_ROOT }}
+          # CIBW_ENVIRONMENT_LINUX: BOOST_ROOT=${{ steps.set-boost-root.outputs.BOOST_ROOT }}
           CIBW_BEFORE_ALL_LINUX: >
             curl -L -o boost_1_80_0.tar.bz2 https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.bz2 &&
             tar --bzip2 -xf boost_1_80_0.tar.bz2 && cd boost_1_80_0 && ./bootstrap.sh --prefix=/usr/local &&
@@ -187,8 +239,7 @@ jobs:
         with:
           output-dir: wheelhouse
 
-      # Build wheels for Linux musllinux
-      - name: Build wheels for ${{ matrix.buildplat[0] }}-${{ matrix.buildplat[2] }}
+      - name: Build wheels for musllinux
         if: startsWith(matrix.buildplat[2], 'musllinux')
         uses: pypa/cibuildwheel@v2.16.2
         env:
