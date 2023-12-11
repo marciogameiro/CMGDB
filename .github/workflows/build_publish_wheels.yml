@@ -167,7 +167,7 @@ jobs:
 
       - name: Add msbuild to PATH
         if: runner.os == 'Windows'
-        uses: microsoft/setup-msbuild@v1.1
+        uses: microsoft/setup-msbuild@v1.3
 
       - name: Install GMP for Windows
         if: runner.os == 'Windows'
