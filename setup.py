@@ -63,6 +63,12 @@ class CMakeBuild(build_ext):
                 ]
                 build_args += ["--config", cfg]
 
+        if sys.platform.startswith("darwin"):
+            # Cross-compile support for macOS - respect ARCHFLAGS if set
+            archs = re.findall(r"-arch (\S+)", os.environ.get("ARCHFLAGS", ""))
+            if archs:
+                cmake_args += ["-DCMAKE_OSX_ARCHITECTURES={}".format(";".join(archs))]
+
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
 
