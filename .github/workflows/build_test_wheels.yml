@@ -27,13 +27,14 @@ jobs:
       matrix:
         # Build wheels for CPython and PyPy when available
         buildplat:
+          # macos-13 is intel, macos-latest is apple silicon
           - [ubuntu-latest,  x86_64,  manylinux_x86_64 ]
           # - [ubuntu-latest,  aarch64, manylinux_aarch64]
           - [ubuntu-latest,  i686,    manylinux_i686   ]
           - [ubuntu-latest,  x86_64,  musllinux_x86_64 ]
           # - [ubuntu-latest,  aarch64, musllinux_aarch64]
           - [ubuntu-latest,  i686,    musllinux_i686   ]
-          - [macos-latest,   x86_64,  macosx_x86_64    ]
+          - [macos-13,       x86_64,  macosx_x86_64    ]
           - [macos-latest,   arm64,   macosx_arm64     ]
           - [windows-latest, AMD64,   win_amd64        ]
           # Not working on win_arm64 and win32 for now
