@@ -34,7 +34,7 @@ def PlotBoxesScatter(morse_sets, num_morse_sets=None, morse_nodes=None, proj_dim
                      clist=None, fig_w=8, fig_h=8, xlim=None, ylim=None, axis_labels=True,
                      xlabel='$x$', ylabel='$y$', fontsize=15, fig_fname=None, dpi=300):
     # Default colormap
-    default_cmap = matplotlib.cm.brg
+    default_cmap = matplotlib.cm.tab20
     rect = morse_sets[0]
     assert len(rect) % 2 == 1, "Wrong dimension in Morse sets data"
     dim = int((len(rect) - 1) / 2)

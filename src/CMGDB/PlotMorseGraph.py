@@ -13,7 +13,7 @@ def PlotMorseGraph(morse_graph, cmap=None, clist=None, shape=None, margin=None):
        as a list of colors to make a colormap."""
 
     # Default colormap
-    default_cmap = matplotlib.cm.brg
+    default_cmap = matplotlib.cm.tab20
     # Number of vertices
     num_verts = len(morse_graph.vertices())
     # Set defaults for unset values
