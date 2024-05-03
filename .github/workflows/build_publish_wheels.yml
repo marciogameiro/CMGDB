@@ -57,10 +57,6 @@ jobs:
           #   python: pp*
           # - buildplat: [windows-latest, x86,     win32            ]
           #   python: pp*
-          # PyPy cross-compilation not supported (need to run on Apple Silicon)
-          # Running on Apple silicon so it should be fine now
-          # - buildplat: [macos-latest,   arm64,   macosx_arm64     ]
-          #   python: pp*
         include:
           # Configuration flags for Install Boost action
           - buildplat: [macos-13,       x86_64,  macosx_x86_64    ]
