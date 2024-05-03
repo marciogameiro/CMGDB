@@ -20,7 +20,7 @@ endif()
 
 if(APPLE)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -stdlib=libc++")
-endif(APPLE)
+endif()
 
 add_subdirectory(pybind11)
 
@@ -44,10 +44,16 @@ if(MSVC)
   # Set GMP and SDSL include and link directories
   message("GMP_ROOT is $ENV{GMP_ROOT}")
   include_directories($ENV{GMP_ROOT}/include)
-  link_directories ($ENV{GMP_ROOT}/lib)
+  link_directories($ENV{GMP_ROOT}/lib)
   message("SDSL_ROOT is $ENV{SDSL_ROOT}")
   include_directories($ENV{SDSL_ROOT}/include)
-  link_directories ($ENV{SDSL_ROOT}/lib/Release)
+  link_directories($ENV{SDSL_ROOT}/lib/Release)
+endif()
+
+if(APPLE)
+  # Add Homebrew symlink include and lib directories
+  include_directories(/opt/homebrew/include)
+  link_directories(/opt/homebrew/lib)
 endif()
 
 include_directories (
