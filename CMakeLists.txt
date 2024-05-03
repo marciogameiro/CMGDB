@@ -51,7 +51,7 @@ if(MSVC)
 endif()
 
 if(APPLE)
-  # Add Homebrew symlink include and lib directories
+  # Homebrew directories for Apple silicon
   include_directories(/opt/homebrew/include)
   link_directories(/opt/homebrew/lib)
 endif()
