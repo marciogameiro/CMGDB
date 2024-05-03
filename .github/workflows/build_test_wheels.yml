@@ -157,7 +157,8 @@ jobs:
         run: |
           brew upgrade
           # brew install boost
-          brew install gmp
+          brew reinstall gmp
+          # brew install gmp
           brew tap Brewsci/bio
           brew install sdsl-lite
         shell: bash
