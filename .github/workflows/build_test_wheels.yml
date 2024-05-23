@@ -265,4 +265,6 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
+          name: cibw-wheels-${{ matrix.buildplat[0] }}-${{ matrix.buildplat[1] }}-${{ strategy.job-index }}
+          # name: cibw-wheels-${{ matrix.os }}-${{ matrix.cibw_archs }}-${{ strategy.job-index }}
           path: wheelhouse/*.whl
