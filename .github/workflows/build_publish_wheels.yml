@@ -60,7 +60,7 @@ jobs:
         include:
           # Configuration flags for Install Boost action
           - buildplat: [macos-13,       x86_64,  macosx_x86_64    ]
-            platform_version: 10.15 # 11
+            platform_version: 11
             link: static+shared
             toolset: clang
           # - buildplat: [windows-latest, AMD64,   win_amd64        ]
@@ -112,7 +112,7 @@ jobs:
           tar --bzip2 -xf boost_1_80_0.tar.bz2
           cd boost_1_80_0
           ./bootstrap.sh --prefix=${INSTALL_PREFIX}
-          ./b2 install -d0 -j4 architecture=arm cxxflags="-arch arm64" --with-chrono --with-thread --with-serialization --with-date_time --with-atomic
+          ./b2 install -d0 -j4 architecture=arm cxxflags="-arch arm64" macosx-version-min=10.9 --with-chrono --with-thread --with-serialization --with-date_time --with-atomic
           echo "BOOST_ROOT=${INSTALL_PREFIX}" >> $GITHUB_OUTPUT
         shell: bash
 
