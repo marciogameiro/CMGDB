@@ -60,7 +60,7 @@ jobs:
         include:
           # Configuration flags for Install Boost action
           - buildplat: [macos-13,       x86_64,  macosx_x86_64    ]
-            platform_version: 11
+            platform_version: 10.15 # 11
             link: static+shared
             toolset: clang
           # - buildplat: [windows-latest, AMD64,   win_amd64        ]
