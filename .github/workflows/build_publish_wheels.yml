@@ -65,7 +65,7 @@ jobs:
             link: static+shared
             toolset: clang
           # Configuration flag for target macOS
-          - [macos-latest,   arm64,   macosx_arm64     ]
+          - buildplat: [macos-latest,   arm64,   macosx_arm64     ]
             macosx_deployment_target: 14.0
           # - buildplat: [windows-latest, AMD64,   win_amd64        ]
           #   platform_version: 2022
