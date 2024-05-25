@@ -59,11 +59,15 @@ jobs:
           # - buildplat: [macos-latest,   arm64,   macosx_arm64     ]
           #   python: pp39
         include:
-          # Configuration flags for Install Boost action
+          # Configuration flags for Install Boost action and target macOS
           - buildplat: [macos-13,       x86_64,  macosx_x86_64    ]
+            macosx_deployment_target: 11.0
             platform_version: 11
             link: static+shared
             toolset: clang
+          # Configuration flag for target macOS
+          - [macos-latest,   arm64,   macosx_arm64     ]
+            macosx_deployment_target: 14.0
           # - buildplat: [windows-latest, AMD64,   win_amd64        ]
           #   platform_version: 2022
           #   link: static
@@ -212,6 +216,7 @@ jobs:
           # CIBW_ARCHS_LINUX: x86_64
           # CIBW_ARCHS_MACOS: x86_64 arm64
           # CIBW_ARCHS_WINDOWS: AMD64
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macosx_deployment_target }}
           # CIBW_ENVIRONMENT: BOOST_ROOT=${{ steps.set-boost-root.outputs.BOOST_ROOT }}
           CIBW_ENVIRONMENT_WINDOWS: >
             BOOST_ROOT=${{ steps.set-boost-root.outputs.BOOST_ROOT }}
