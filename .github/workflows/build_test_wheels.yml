@@ -61,13 +61,13 @@ jobs:
         include:
           # Configuration flags for Install Boost action and target macOS
           - buildplat: [macos-13,       x86_64,  macosx_x86_64    ]
-            macosx_deployment_target: 11.0
+            macosx_deployment_target: 10.9
             platform_version: 11
             link: static+shared
             toolset: clang
           # Configuration flag for target macOS
           - buildplat: [macos-latest,   arm64,   macosx_arm64     ]
-            macosx_deployment_target: 14.0
+            macosx_deployment_target: 11.0
           # - buildplat: [windows-latest, AMD64,   win_amd64        ]
           #   platform_version: 2022
           #   link: static
