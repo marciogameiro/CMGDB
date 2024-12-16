@@ -324,7 +324,7 @@ jobs:
         merge-multiple: true
 
     - name: Publish package to TestPyPI
-      uses: pypa/gh-action-pypi-publish@v1.10.0
+      uses: pypa/gh-action-pypi-publish@v1.12.3
       with:
         user: __token__
         password: ${{ secrets.TEST_PYPI_TOKEN }}
@@ -332,7 +332,7 @@ jobs:
       if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
 
     - name: Publish package to PyPI
-      uses: pypa/gh-action-pypi-publish@v1.10.0
+      uses: pypa/gh-action-pypi-publish@v1.12.3
       with:
         user: __token__
         password: ${{ secrets.PYPI_TOKEN }}
