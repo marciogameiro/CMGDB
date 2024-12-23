@@ -66,7 +66,7 @@ jobs:
             toolset: clang
           # Configuration flag for target macOS
           - buildplat: [macos-latest,   arm64,   macosx_arm64     ]
-            macosx_deployment_target: 11.0
+            macosx_deployment_target: 14.0
           # - buildplat: [windows-latest, AMD64,   win_amd64        ]
           #   platform_version: 2022
           #   link: static
@@ -223,7 +223,7 @@ jobs:
             GMP_ROOT=${{ steps.install-gmp-windows.outputs.GMP_ROOT }}
           CIBW_ENVIRONMENT_MACOS: >
             BOOST_ROOT=${{ steps.set-boost-root.outputs.BOOST_ROOT }}
-            MACOSX_DEPLOYMENT_TARGET=11.0
+            MACOSX_DEPLOYMENT_TARGET=${{ matrix.macosx_deployment_target }}
           # CIBW_ENVIRONMENT_LINUX: BOOST_ROOT=${{ steps.set-boost-root.outputs.BOOST_ROOT }}
           CIBW_BEFORE_ALL_LINUX: >
             curl -L -o boost_1_80_0.tar.bz2 https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.bz2 &&
