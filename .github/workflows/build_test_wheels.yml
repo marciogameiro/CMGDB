@@ -61,7 +61,7 @@ jobs:
         include:
           # Configuration flags for Install Boost action and target macOS
           - buildplat: [macos-13,       x86_64,  macosx_x86_64    ]
-            macosx_deployment_target: 10.9
+            macosx_deployment_target: 11.0
             platform_version: 11
             link: static+shared
             toolset: clang
@@ -222,7 +222,9 @@ jobs:
             BOOST_ROOT=${{ steps.set-boost-root.outputs.BOOST_ROOT }}
             SDSL_ROOT=${{ steps.install-sdsl-lite-windows.outputs.SDSL_ROOT }}
             GMP_ROOT=${{ steps.install-gmp-windows.outputs.GMP_ROOT }}
-          CIBW_ENVIRONMENT_MACOS: BOOST_ROOT=${{ steps.set-boost-root.outputs.BOOST_ROOT }}
+          CIBW_ENVIRONMENT_MACOS: >
+            BOOST_ROOT=${{ steps.set-boost-root.outputs.BOOST_ROOT }}
+            MACOSX_DEPLOYMENT_TARGET=11.0
           # CIBW_ENVIRONMENT_LINUX: BOOST_ROOT=${{ steps.set-boost-root.outputs.BOOST_ROOT }}
           CIBW_BEFORE_ALL_LINUX: >
             curl -L -o boost_1_80_0.tar.bz2 https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.bz2 &&
