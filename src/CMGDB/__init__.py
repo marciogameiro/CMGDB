@@ -6,3 +6,4 @@ from CMGDB.PlotMorseSets import *
 from CMGDB.LoadMorseSetFile import *
 from CMGDB.ComputeBoxMap import *
 from CMGDB.SaveMorseData import *
+from CMGDB.BoxMapData import *
