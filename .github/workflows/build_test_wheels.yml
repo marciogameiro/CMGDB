@@ -113,7 +113,7 @@ jobs:
         id: install-boost-macos-arm
         run: |
           INSTALL_PREFIX="/Users/runner"
-          curl -L -o boost_1_80_0.tar.bz2 https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.bz2
+          curl -L -o boost_1_80_0.tar.bz2 https://archives.boost.io/release/1.80.0/source/boost_1_80_0.tar.bz2
           tar --bzip2 -xf boost_1_80_0.tar.bz2
           cd boost_1_80_0
           ./bootstrap.sh --prefix=${INSTALL_PREFIX}
@@ -126,7 +126,7 @@ jobs:
         id: install-boost-windows
         run: |
           INSTALL_PREFIX="C:/boost"
-          curl -L -o boost_1_80_0.tar.bz2 https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.bz2
+          curl -L -o boost_1_80_0.tar.bz2 https://archives.boost.io/release/1.80.0/source/boost_1_80_0.tar.bz2
           tar --bzip2 -xf boost_1_80_0.tar.bz2
           cd boost_1_80_0
           ./bootstrap.sh --prefix=${INSTALL_PREFIX}
@@ -227,7 +227,7 @@ jobs:
             MACOSX_DEPLOYMENT_TARGET=${{ matrix.macosx_deployment_target }}
           # CIBW_ENVIRONMENT_LINUX: BOOST_ROOT=${{ steps.set-boost-root.outputs.BOOST_ROOT }}
           CIBW_BEFORE_ALL_LINUX: >
-            curl -L -o boost_1_80_0.tar.bz2 https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.bz2 &&
+            curl -L -o boost_1_80_0.tar.bz2 https://archives.boost.io/release/1.80.0/source/boost_1_80_0.tar.bz2 &&
             tar --bzip2 -xf boost_1_80_0.tar.bz2 && cd boost_1_80_0 && ./bootstrap.sh --prefix=/usr/local &&
             ./b2 install -d0 -j4 --with-chrono --with-thread --with-serialization --with-date_time --with-atomic &&
             ls -l /usr/local &&
@@ -236,7 +236,7 @@ jobs:
             cd sdsl-lite && export CFLAGS=-fPIC && export CXXFLAGS=-fPIC &&
             ./install.sh /usr/local
             # yum install boost-devel
-            # curl -L -o boost_1_80_0.tar.gz https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.gz
+            # curl -L -o boost_1_80_0.tar.gz https://archives.boost.io/release/1.80.0/source/boost_1_80_0.tar.bz2
             # tar -xzf boost_1_80_0.tar.gz
           CIBW_BEFORE_BUILD_WINDOWS: pip install delvewheel
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: delvewheel repair -w {dest_dir} {wheel}
@@ -250,7 +250,7 @@ jobs:
           CIBW_BUILD: ${{ matrix.python }}-${{ matrix.buildplat[2] }}
           CIBW_ARCHS: ${{ matrix.buildplat[1] }}
           CIBW_BEFORE_ALL_LINUX: >
-            curl -L -o boost_1_80_0.tar.bz2 https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.bz2 &&
+            curl -L -o boost_1_80_0.tar.bz2 https://archives.boost.io/release/1.80.0/source/boost_1_80_0.tar.bz2 &&
             tar --bzip2 -xf boost_1_80_0.tar.bz2 && cd boost_1_80_0 && ./bootstrap.sh --prefix=/usr/local &&
             ./b2 install -d0 -j4 --with-chrono --with-thread --with-serialization --with-date_time --with-atomic &&
             ls -l /usr/local &&
