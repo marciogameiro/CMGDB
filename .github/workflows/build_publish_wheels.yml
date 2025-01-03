@@ -209,8 +209,10 @@ jobs:
         uses: pypa/cibuildwheel@v2.22.0
         env:
           CIBW_BUILD: ${{ matrix.python }}-${{ matrix.buildplat[2] }}
-          # Skip CPython 3.6 on Windows
-          CIBW_SKIP: cp36-win*
+          # Skip early versions of Python (for CPython and PyPy)
+          CIBW_SKIP: cp36-* cp37-* cp38-* pp37-* pp38-*
+          # # Skip CPython 3.6 on Windows
+          # CIBW_SKIP: cp36-win*
           CIBW_ARCHS: ${{ matrix.buildplat[1] }}
           # CIBW_ARCHS_LINUX: x86_64
           # CIBW_ARCHS_MACOS: x86_64 arm64
@@ -247,6 +249,8 @@ jobs:
         uses: pypa/cibuildwheel@v2.22.0
         env:
           CIBW_BUILD: ${{ matrix.python }}-${{ matrix.buildplat[2] }}
+          # Skip early versions of Python
+          CIBW_SKIP: cp36-* cp37-* cp38-* cp39-* cp310-*
           CIBW_ARCHS: ${{ matrix.buildplat[1] }}
           CIBW_BEFORE_ALL_LINUX: >
             curl -L -o boost_1_80_0.tar.bz2 https://archives.boost.io/release/1.80.0/source/boost_1_80_0.tar.bz2 &&
