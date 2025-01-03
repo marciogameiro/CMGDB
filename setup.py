@@ -86,7 +86,7 @@ with open(os.path.join(this_directory, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='CMGDB',
-    version='1.0.8',
+    version='1.1.0',
     author='Marcio Gameiro',
     author_email='marciogameiro@gmail.com',
     description='CMGDB (Conley Morse Graph Database) Python Extension',
