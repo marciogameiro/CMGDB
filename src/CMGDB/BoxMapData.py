@@ -3,6 +3,8 @@
 
 # TODO: Use a KD-Tree or a grid to make it more efficient to find the points inside a rectangle
 
+import numpy as np
+
 class BoxMapData:
     """Define a box map from datasets X and Y, where the points in Y are the images
        of the points in X. Given an input rectangle rect, compute a rectangle f_rect
