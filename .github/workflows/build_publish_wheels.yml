@@ -98,7 +98,7 @@ jobs:
       # - name: Install boost for Windows Intel and macOS Intel
         if: matrix.buildplat[2] == 'macosx_x86_64'
         # if: matrix.buildplat[2] == 'macosx_x86_64' || matrix.buildplat[2] == 'win_amd64'
-        uses: MarkusJx/install-boost@v2.4.5
+        uses: MarkusJx/install-boost@v2.5.0
         id: install-boost
         with:
           boost_version: 1.80.0
