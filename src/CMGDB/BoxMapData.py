@@ -14,7 +14,7 @@ class BoxMapData:
        'terminate' raise an exception, and if map_empty is 'interp' use a form of
        interpolation to compute the image."""
 
-    def __init__(self, X, Y, map_empty='interp', lower_bounds=None, upper_bounds=None, padding=False):
+    def __init__(self, X, Y, map_empty='interp', lower_bounds=None, upper_bounds=None, domain_padding=True, padding=False):
         if map_empty not in ['interp', 'outside', 'terminate']:
             raise ValueError("Invalid value for map_empty. Allowed values are: 'interp', 'outside', or 'terminate'")
         if map_empty == 'outside' and (lower_bounds is None or upper_bounds is None):
@@ -24,6 +24,7 @@ class BoxMapData:
         self.map_empty = map_empty
         self.lower_bounds = lower_bounds
         self.upper_bounds = upper_bounds
+        self.domain_padding = domain_padding
         self.padding = padding
         # num_pts, dim = self.X.shape
         self.dim = self.X.shape[1]
@@ -42,16 +43,14 @@ class BoxMapData:
         return Y_rect
 
     def interpolate(self, rect):
-        """Compute the image of the empty rectangle rect using interpolation. Double
-           the size of the rectangle until there are X points inside, then return a
-           rectangle with the corresponding points in Y (scale down the size of the
-           rectangle proportionally to the increase in size of the input rectangle)."""
+        """Compute the image of the empty rectangle rect using interpolation.
+           Double the size of the rectangle until there are X points inside
+           and return a rectangle with the corresponding points in Y."""
         Y_rect = self.map_points(rect)
         if Y_rect.size > 0:
             return Y_rect
         l_bounds = rect[:self.dim]
         u_bounds = rect[self.dim:]
-        n_steps = 0
         # Double rectangle size until nonempty
         while Y_rect.size == 0:
             l_bounds_new = [l_b - (u_b - l_b) / 2 for l_b, u_b in zip(l_bounds, u_bounds)]
@@ -59,18 +58,6 @@ class BoxMapData:
             l_bounds, u_bounds = l_bounds_new, u_bounds_new
             rect_new = l_bounds_new + u_bounds_new
             Y_rect = self.map_points(rect_new)
-            n_steps += 1
-        # Factor by which rect was increased
-        factor = 2**n_steps
-        # Get min and max vertices of Y_rect
-        Y_l_bounds = list(np.min(Y_rect, axis=0))
-        Y_u_bounds = list(np.max(Y_rect, axis=0))
-        # Get center and radius (half width) of Y_rect
-        Y_center_radius = [((l_b + u_b) / 2, (u_b - l_b) / 2) for l_b, u_b in zip(Y_l_bounds, Y_u_bounds)]
-        # Return min and max vertices of scaled-down rectangle
-        y_l_bounds = [c - r / factor for c, r in Y_center_radius]
-        y_u_bounds = [c + r / factor for c, r in Y_center_radius]
-        Y_rect = np.array([y_l_bounds, y_u_bounds])
         return Y_rect
 
     def compute(self, rect):
@@ -87,6 +74,12 @@ class BoxMapData:
             f_u_bounds = [b + 2 for b in self.upper_bounds]
             f_rect = f_l_bounds + f_u_bounds
             return f_rect
+        # Pad domain rectangle if flag is set
+        if self.domain_padding:
+            l_bounds = [l_b - (u_b - l_b) for l_b, u_b in zip(rect[:self.dim], rect[self.dim:])]
+            u_bounds = [u_b + (u_b - l_b) for l_b, u_b in zip(rect[:self.dim], rect[self.dim:])]
+            rect_new = l_bounds + u_bounds
+            Y_rect = self.map_points(rect_new)
         # Interpolate if empty image and map_empty is interp
         if Y_rect.size == 0 and self.map_empty == 'interp':
             Y_rect = self.interpolate(rect)
