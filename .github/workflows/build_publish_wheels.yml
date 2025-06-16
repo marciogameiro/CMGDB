@@ -206,7 +206,7 @@ jobs:
 
       - name: Build all wheels except for musllinux
         if: startsWith(matrix.buildplat[2], 'musllinux') != true
-        uses: pypa/cibuildwheel@v2.23.3
+        uses: pypa/cibuildwheel@v3.0.0
         env:
           CIBW_BUILD: ${{ matrix.python }}-${{ matrix.buildplat[2] }}
           # Skip early versions of Python (for CPython and PyPy)
@@ -246,7 +246,7 @@ jobs:
 
       - name: Build wheels for musllinux
         if: startsWith(matrix.buildplat[2], 'musllinux')
-        uses: pypa/cibuildwheel@v2.23.3
+        uses: pypa/cibuildwheel@v3.0.0
         env:
           CIBW_BUILD: ${{ matrix.python }}-${{ matrix.buildplat[2] }}
           # Skip early versions of Python
