@@ -1,6 +1,9 @@
 // RelativeMapHomology.h
 // Shaun Harker
 // 9/16/11
+///
+/// Marcio Gameiro
+/// 2025-06-20
 
 #ifndef CHOMP_RELATIVEMAPHOMOLOGY_H
 #define CHOMP_RELATIVEMAPHOMOLOGY_H
@@ -489,7 +492,308 @@ RelativeMapHomology (RelativeMapHomology_t * output,
   PRINT "RMH: Returning.\n";
   return 0;
 }
-  
+
+int RelativeSelfMapHomology (RelativeMapHomology_t * output,
+                             const std::vector < uint64_t > & X_cubes,
+                             const std::vector < uint64_t > & A_cubes,
+                             const std::vector < uint64_t > & sizes,
+                             const std::vector < bool > & periodic,
+                             const std::unordered_map < uint64_t, std::vector < uint64_t > > & F_map,
+                             bool acyclic_check = true) {
+  // Cubical complex dimension
+  int D = sizes . size ();
+
+  // std::cout << "X_cubes size: " << X_cubes . size () << std::endl;
+  // std::cout << "A_cubes size: " << A_cubes . size () << std::endl;
+  // std::cout << "Dimension: " << D << std::endl;
+
+  // Create the Relative Complexes
+
+  // Produce the full complex
+  CubicalComplex * full_complex = new CubicalComplex;
+  CubicalComplex & X = *full_complex;
+
+  // Cubical complex coordinates from index
+  auto coordinates = [&] ( uint64_t index ) {
+    std::vector < uint64_t > coords ( D );
+    for ( int d = 0; d < D; ++ d ) {
+      coords [ d ] = index % sizes [ d ];
+      index = index / sizes [ d ];
+    }
+    return coords;
+  };
+
+  // Learn the bounds of the set of cubes
+  std::vector < uint64_t > min_cube ( D, -1 );
+  std::vector < uint64_t > max_cube ( D, 0 );
+  BOOST_FOREACH ( uint64_t index, X_cubes ) {
+    std::vector <uint64_t> cube = coordinates ( index );
+    for ( int d = 0; d < D; ++ d ) {
+      if ( min_cube [ d ] > cube [ d ] ) min_cube [ d ] = cube [ d ];
+      if ( max_cube [ d ] < cube [ d ] ) max_cube [ d ] = cube [ d ];
+    }
+  }
+
+  // Get X sizes and reset periodic flag if not touching domain boundary
+  std::vector < uint64_t > dimension_sizes ( D, 1 );
+  std::vector < bool > is_periodic = periodic;
+  for ( int d = 0; d < D; ++ d ) {
+    dimension_sizes [ d ] = max_cube [ d ] - min_cube [ d ] + 1;
+    if ( min_cube [ d ] > 0 )               is_periodic [ d ] = false;
+    if ( max_cube [ d ] < sizes [ d ] - 1 ) is_periodic [ d ] = false;
+  }
+
+  // Initialize cubical complex X
+  X . initialize ( dimension_sizes, is_periodic );
+
+  // Add list of cubes X_cubes to complex X
+  BOOST_FOREACH ( uint64_t index, X_cubes ) {
+    std::vector <uint64_t> cube = coordinates ( index );
+    std::vector < uint64_t > offset ( D );
+    for ( int d = 0; d < D; ++ d )
+      offset [ d ] = cube [ d ] - min_cube [ d ];
+    X . addFullCube ( offset );
+  }
+
+  // Finalize X construction
+  X . finalize ();
+
+  // std::cout << "X dimension: " << X . dimension () << std::endl;
+  // std::cout << "X size: " << X . size () << std::endl;
+
+  // Get mapping from cubical complex index to chomp index
+  std::unordered_map < uint64_t, uint64_t > index2chomp;
+  BOOST_FOREACH ( uint64_t index, X_cubes ) {
+    std::vector <uint64_t> cube = coordinates ( index );
+    std::vector < uint64_t > offset ( D );
+    for ( int d = 0; d < D; ++ d )
+      offset [ d ] = cube [ d ] - min_cube [ d ];
+    uint64_t chomp_index = X . cubeIndex ( offset );
+    index2chomp [ index ] = chomp_index;
+  }
+
+  // Get map F in terms of cells indices in X
+  std::unordered_map < uint64_t, std::vector < uint64_t > > F;
+  for ( const auto& F_pair : F_map ) {
+    uint64_t key = F_pair . first;
+    uint64_t chomp_key = index2chomp [ key ];
+    F [ chomp_key ] . reserve ( F_pair . second . size () );
+    for ( uint64_t index : F_pair.second ) {
+      uint64_t chomp_index = index2chomp [ index ];
+      F [ chomp_key ] . push_back ( chomp_index );
+    }
+  }
+
+  // Produce the relative complex
+  BitmapSubcomplex * pair_complex = new BitmapSubcomplex ( X, true );
+  BitmapSubcomplex * rel_complex = new BitmapSubcomplex ( X, false );
+  BitmapSubcomplex & XA = * pair_complex;
+  BitmapSubcomplex & A = * rel_complex;
+
+  // Add cells from A_cubes to A and remove from X
+  BOOST_FOREACH ( uint64_t index, A_cubes ) {
+    std::vector <uint64_t> cube = coordinates ( index );
+    std::vector < uint64_t > offset ( D );
+    for ( int d = 0; d < D; ++ d )
+      offset [ d ] = cube [ d ] - min_cube [ d ];
+    std::vector < std::vector < uint64_t > > cells = X . fullCubeIndexes ( offset );
+    for ( int d = 0; d <= D; ++ d ) {
+      BOOST_FOREACH ( uint64_t cell, cells [ d ] ) {
+        XA . erase ( cell, d );
+        A . insert ( cell, d );
+      }
+    }
+  }
+
+  XA . finalize ();
+  A . finalize ();
+
+  // Don't create domain_pair, just use X, XA, and A
+  RelativePair domain_pair ( &X, &XA, &A );
+
+  // Set domain and co-domain (same as domain)
+  CubicalComplex & full_domain = domain_pair . base ();
+  BitmapSubcomplex & domain = domain_pair . pair ();
+  BitmapSubcomplex & domain_A = domain_pair . relative ();
+  CubicalComplex & full_codomain = domain_pair . base ();
+  BitmapSubcomplex & codomain = domain_pair . pair ();
+
+  // std::cout << "Domain size: " << full_domain . size () << std::endl;
+  // std::cout << "(X, A) size = (" << domain . size() << ", " << domain_A . size () << ")" << std::endl;
+  // std::cout << "(X, A) top size = (" << domain . size(D) << ", " << domain_A . size (D) << ")" << std::endl;
+
+  /// Generate domain_grid_elements_X and domain_grid_elements_A tables.
+  /// These are for determining which top cells are involved in constructing
+  /// a fiber (and which are relative).
+  std::vector < std::vector < boost::unordered_set < Index > > > domain_grid_elements_X ( D + 1 );
+  std::vector < std::vector < boost::unordered_set < Index > > > domain_grid_elements_A ( D + 1 );
+
+  for ( int d = 0; d <= D; ++ d ) {
+    domain_grid_elements_X [ d ] . resize ( full_domain . size ( d ) );
+    domain_grid_elements_A [ d ] . resize ( full_domain . size ( d ) );
+  }
+
+  uint64_t N = full_domain . size ( D );
+  for ( uint64_t i = 0; i < N; ++ i ) {
+    std::vector < boost::unordered_set < uint64_t > > closure_of_i ( D + 1 );
+    closure_of_i [ D ] . insert ( i );
+    closure ( closure_of_i, full_domain );
+    for ( int d = 0; d <= D; ++ d ) {
+      BOOST_FOREACH ( uint64_t j, closure_of_i [ d ] ) {
+        domain_grid_elements_X [ d ] [ j ] . insert ( i );
+      }
+    }
+  }
+
+  N = domain_A . size ( D );
+  for ( uint64_t k = 0; k < N; ++ k ) {
+    uint64_t i = domain_A . indexToCell ( k, D );
+    std::vector < boost::unordered_set < uint64_t > > closure_of_i ( D + 1 );
+    closure_of_i [ D ] . insert ( i );
+    closure ( closure_of_i, full_domain );
+    for ( int d = 0; d <= D; ++ d ) {
+      BOOST_FOREACH ( uint64_t j, closure_of_i [ d ] ) {
+        domain_grid_elements_A [ d ] [ j ] . insert ( i );
+      }
+    }
+  }
+
+  // Compute the homology generators
+  int cutoff_dimension = full_domain . dimension ();
+  // Computing Domain Generators with MorseGenerators
+  Generators_t domain_gen = MorseGenerators ( domain, cutoff_dimension );
+  // Computing Morse Complex of codomain (codomain_morse)
+  MorseComplex codomain_morse ( codomain );
+  // Computing Generators of codomain_morse
+  Generators_t codomain_morse_gen = SmithGenerators ( codomain_morse, cutoff_dimension );
+
+  // Compute the cycles projected into the codomain through the graph
+  std::vector < std::vector < Chain > > codomain_cycles ( D + 1 );
+
+  // Main Loop: Loop through each domain generator
+  bool acyclic_map = true;
+  for ( int d = 0; d <= D; ++ d ) {
+    if ( not acyclic_map ) break;
+    int number_of_domain_gen = domain_gen [ d ] . size ();
+    codomain_cycles [ d ] . resize ( number_of_domain_gen );
+    // std::cout << "Number of generators at dimension " << d << ": " << number_of_domain_gen << std::endl;
+
+    for ( int gi = 0; gi < number_of_domain_gen; ++ gi ) {
+      if ( not acyclic_map ) break;
+      // std::cout << "Dimension = " << d << ", generator = " << gi << std::endl;
+
+      // Lift the domain generator into the Relative Graph Complex
+      Chain answer;
+      answer . dimension () = d;
+      std::vector < boost::unordered_map < Index, Chain > > graph_boundary ( D + 1 );
+      // Begin by Chain Lift
+      // std::cout << "Chain Lift" << std::endl;
+      // First, get the domain generator and include it into full_domain
+      Chain domain_generator = domain . include ( domain_gen [ d ] [ gi ] . first );
+      // std::cout << "Chain size = " << domain_generator () . size () << std::endl;
+
+      // Now lift it
+      BOOST_FOREACH ( const Term & t, domain_generator () ) {
+        if ( not acyclic_map ) break;
+        boost::unordered_set < Index > X_nbs, A_nbs;
+        X_nbs = domain_grid_elements_X [ d ] [ t . index () ];
+        A_nbs = domain_grid_elements_A [ d ] [ t . index () ];
+        FiberComplex fiber ( X_nbs, A_nbs, full_domain, full_codomain, F );
+
+        if ( fiber . size () == 0 ) {
+          std::cout << "UNEXPECTED: CANT LIFT CHAIN DUE TO EMPTY FIBER." << std::endl;
+          acyclic_map = false;
+          break;
+        }
+
+        if ( acyclic_check && ( not fiber . acyclic () ) ) {
+          acyclic_map = false;
+          break;
+        }
+
+        // Choose a vertex in fiber
+        Index choice = fiber . choose ();
+        if ( d == 0 ) answer += Term ( choice, t . coef () );
+        Chain bd = full_domain . boundary ( t . index (), d );
+        BOOST_FOREACH ( const Term & s, bd () ) {
+          graph_boundary [d-1] [ s . index () ] . dimension () = 0;
+          graph_boundary [d-1] [ s . index () ] += Term ( choice, t . coef () * s . coef () );
+        }
+      }
+      // std::cout << "Cycle Lift -- iterative preboundary loop begins now" << std::endl;
+
+      // Now process every fiber we can see in graph_boundary
+      // Loop through every fiber dimension (fd)
+      for ( int fd = d - 1; fd >= 0; -- fd ) {
+        if ( not acyclic_map ) break;
+        // std::cout << "Fiber dimension = " << fd << std::endl;
+
+        // Loop through every non-empty fiber
+        typedef std::pair < Index, Chain > IndexChainPair;
+        BOOST_FOREACH ( const IndexChainPair & fiberchain, graph_boundary [fd] ) {
+          if ( not acyclic_map ) break;
+          // Determine fiber
+          boost::unordered_set < Index > X_nbs, A_nbs;
+          X_nbs = domain_grid_elements_X [ fd ] [ fiberchain . first ];
+          A_nbs = domain_grid_elements_A [ fd ] [ fiberchain . first ];
+          FiberComplex fiber ( X_nbs, A_nbs, full_domain, full_codomain, F );
+
+          if ( acyclic_check && ( not fiber . acyclic_or_trivial () ) ) {
+            acyclic_map = false;
+            break;
+          }
+
+          // Determine chain in fiber
+          Chain projected = fiber . project ( fiberchain . second );
+          // Work out the preboundary
+          Chain preboundary = fiber . preboundary ( projected );
+          // Include the preboundary back into the codomain
+          Chain included_preboundary = fiber . include ( preboundary );
+
+          // If this is a zero-dim fiber, add to answer
+          if ( fd == 0 ) answer -= included_preboundary;
+          // Add preboundary to adjacent fibers
+          Chain bd = full_domain . boundary (fiberchain . first, fd );
+          Ring grade;
+          if ( fd % 2 ) grade = Ring ( -1 ); else grade = Ring ( 1 );
+          BOOST_FOREACH ( const Term & s, bd () ) {
+            graph_boundary [fd-1] [ s . index () ] . dimension () = d - fd;
+            graph_boundary [fd-1] [ s . index () ] -= included_preboundary * (grade * s . coef ());
+          }
+        }
+      }
+
+      // First project into the relative codomain complex
+      Chain relative_answer = simplify ( codomain . project ( answer ) );
+
+      // Project the Relative Graph Cycle to the Codomain
+      codomain_cycles [ d ] [ gi ] = codomain_morse . lower ( relative_answer );
+    }
+  }  // Main Loop: for ( int d = 0; d <= D; ++ d )
+
+  if ( not acyclic_map ) {
+    std::cout << "Returning no answer due to lack of acyclicity in map." << std::endl;
+    return 1;
+  }
+
+  // Loop through each Codomain Cycle
+  for ( int d = 0; d <= codomain_morse . dimension (); ++ d ) {
+    Matrix G = chainsToMatrix ( codomain_morse_gen [ d ], codomain_morse, d );
+    Matrix Z = chainsToMatrix ( codomain_cycles [ d ], codomain_morse, d );
+    Matrix MapHom = SmithSolve (G, Z);
+    if ( MapHom . number_of_rows () != 0 ) {
+      std::cout << "Dimension " << d << std::endl;
+      print_matrix (MapHom);
+    }
+    output -> push_back ( MapHom );
+  }
+  for ( int d = codomain_morse . dimension () + 1; d <= D; ++ d ) {
+    output -> push_back ( Matrix (0, 0) );
+  }
+
+  return 0;
+}
+
 } // namespace chomp
 
 #endif

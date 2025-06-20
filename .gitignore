@@ -1,5 +1,44 @@
-.DS_Store
-.ipynb_checkpoints
-*~
-build
+# Executables
 bin
+
+# Build directories
+build*
+
+# Binaries directories
+dist
+*.egg-info
+__pycache__
+
+# macOS files
+.DS_Store
+
+# Jypyter notebook files
+.ipynb_checkpoints
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+*.pyc
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executable files
+*.exe
+
+# Emacs backup files
+*~

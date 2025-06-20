@@ -1,6 +1,9 @@
 // FiberComplex.h
 // Shaun Harker
 // 9/16/11
+///
+/// Marcio Gameiro
+/// 2025-06-15
 
 #ifndef CHOMP_FIBERCOMPLEX_H
 #define CHOMP_FIBERCOMPLEX_H
@@ -40,7 +43,13 @@ public:
                  const CubicalComplex & domain,
                  CubicalComplex & codomain, 
                  const RectMap & F );
-    
+
+  FiberComplex ( const boost::unordered_set < Index > & X_nbs, 
+                 const boost::unordered_set < Index > & A_nbs,
+                 const CubicalComplex & domain,
+                 CubicalComplex & codomain, 
+                 const std::unordered_map < uint64_t, std::vector < uint64_t > > & F );
+
   virtual ~FiberComplex ( void ) {}; 
   
   // Inclusion and Projection
@@ -168,6 +177,77 @@ inline FiberComplex::FiberComplex
   }
   //finishedInserting ();
   
+}
+
+inline FiberComplex::FiberComplex
+( const boost::unordered_set < Index > & X_nbs,
+  const boost::unordered_set < Index > & A_nbs,
+  const CubicalComplex & domain,
+  CubicalComplex & codomain,
+  const std::unordered_map < uint64_t, std::vector < uint64_t > > & F ) {
+  // Construct the fiber
+  supercomplex_ = & codomain;
+  int D = supercomplex_ -> dimension ();
+
+  // Determine Images
+
+  std::vector < boost::unordered_set < Index > > X_image ( D + 1 );
+  std::vector < boost::unordered_set < Index > > A_image ( D + 1 );
+  BOOST_FOREACH ( Index i, X_nbs ) {
+    // std::insert_iterator<boost::unordered_set < Index > > ii ( X_image [ D ], X_image [ D ] . end () );
+    for ( const auto& j : F . at ( i ) ) {
+      X_image [ D ] . insert ( j );
+      // *ii = j;
+    }
+  }
+  BOOST_FOREACH ( Index i, A_nbs ) {
+    // std::insert_iterator<boost::unordered_set < Index > > ii ( A_image [ D ], A_image [ D ] . end () );
+    for ( const auto& j : F . at ( i ) ) {
+      A_image [ D ] . insert ( j );
+      // *ii = j;
+    }
+  }
+
+  // std::cout << "Size of codomain: " << codomain . size () << std::endl;
+  // for ( int d = 0; d <= D; ++ d ) {
+  //   std::cout << " size of X_image [ " << d << " ] = " << X_image [ d ] . size () << std::endl;
+  // }
+  // for ( int d = 0; d <= D; ++ d ) {
+  //   std::cout << " size of A_image [ " << d << " ] = " << A_image [ d ] . size () << std::endl;
+  // }
+
+  // Find the combinatorial closures of X and A
+  closure ( X_image, * supercomplex_ );
+  closure ( A_image, * supercomplex_ );
+
+  // std::cout << "Size of codomain: " << codomain . size () << std::endl;
+  // for ( int d = 0; d <= D; ++ d ) {
+  //   std::cout << " size of X_image [ " << d << " ] = " << X_image [ d ] . size () << std::endl;
+  // }
+  // for ( int d = 0; d <= D; ++ d ) {
+  //   std::cout << " size of A_image [ " << d << " ] = " << A_image [ d ] . size () << std::endl;
+  // }
+
+  // std::cout << "PICKING CHOOSE\n";
+  if ( X_image [ 0 ] . size () > 0 ) {
+    choose_ = * X_image [ 0 ] . begin ();
+  }
+  // std::cout << "CHOOSE PICKED\n";
+  // Initialize bitmap
+  data_ . resize ( D + 1 );
+  for ( int d = 0; d <= D; ++ d ) {
+    BOOST_FOREACH ( Index i, X_image [ d ] ) data_ [d] . insert ( i );
+    BOOST_FOREACH ( Index i, A_image [ d ] ) data_ [d] . erase ( i );
+  }
+
+  // Initialize complex
+  // startInserting ();
+  for ( int d = 0; d <= D; ++ d ) {
+    BOOST_FOREACH ( Index i, data_[d] ) {
+      insertCell ( i, d );
+    }
+  }
+  // finishedInserting ();
 }
 
 inline void FiberComplex::include ( Chain * output, 

@@ -1,6 +1,9 @@
 /// ConleyIndex.h
 /// Shaun Harker
 /// 9/22/11
+///
+/// Marcio Gameiro
+/// 2025-06-20
 
 #ifndef CHOMP_CONLEYINDEX_H
 #define CHOMP_CONLEYINDEX_H
@@ -283,6 +286,25 @@ inline bool & ConleyIndex_t::undefined ( void ) {
 inline const bool & ConleyIndex_t::undefined ( void ) const {
   return undefined_;
 } /* ConleyIndex_t::undefined */
+
+void CombinatorialConleyIndex ( ConleyIndex_t * output,
+                                const std::vector < uint64_t > & X_cubes,
+                                const std::vector < uint64_t > & A_cubes,
+                                const std::vector < uint64_t > & sizes,
+                                const std::vector < bool > & periodic,
+                                const std::unordered_map < uint64_t, std::vector < uint64_t > > & F,
+                                bool acyclic_check = true ) {
+  // Given a combinatorial index pair (X, A) and a map F
+  // Computes the Conley index (the relative homology map)
+  int error_code = RelativeSelfMapHomology ( &(output -> data ()), X_cubes, A_cubes, sizes, periodic, F, acyclic_check );
+  if ( error_code == 1 ) {
+    std::cout << "Problem computing conley index. Returning undefined result" << std::endl;
+    output -> undefined () = true;
+    return;
+  }
+
+  return;
+} // CombinatorialConleyIndex
 
 } // namespace chomp
 

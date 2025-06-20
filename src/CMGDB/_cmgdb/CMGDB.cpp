@@ -24,11 +24,28 @@
 
 #include "Configuration.h"
 
+#include "chomp/ConleyIndex.h"
+#include "conleyIndexString.h"
+
 #include <boost/serialization/export.hpp>
 #include "SuccinctGrid.h"
 BOOST_CLASS_EXPORT_IMPLEMENT(SuccinctGrid);
 #include "PointerGrid.h"
 BOOST_CLASS_EXPORT_IMPLEMENT(PointerGrid);
+
+std::vector < std::string >
+ComputeConleyIndex ( const std::vector < uint64_t > & X_cubes,
+                     const std::vector < uint64_t > & A_cubes,
+                     const std::vector < uint64_t > & sizes,
+                     const std::vector < bool > & periodic,
+                     const std::unordered_map < uint64_t, std::vector < uint64_t > > & F,
+                     bool acyclic_check = true ) {
+  // Compute the Conley index from a combinatorial index pair (X, A) and a map F
+  chomp::ConleyIndex_t conley_index;
+  chomp::CombinatorialConleyIndex ( &conley_index, X_cubes, A_cubes, sizes, periodic, F, acyclic_check );
+  // Return Conley index strings
+  return conleyIndexString ( conley_index );
+}
 
 std::pair<MorseGraph, MapGraph> ComputeConleyMorseGraph ( Model const& model ) {
   std::shared_ptr<const Map> map = model . map ();
@@ -237,6 +254,7 @@ PYBIND11_MODULE(_cmgdb, m) {
 
   m.doc() = "Conley Morse Graph Database Module";
 
+  m.def("ComputeConleyIndex", &ComputeConleyIndex);
   m.def("ComputeConleyMorseGraph", &ComputeConleyMorseGraph);
   m.def("ComputeMorseGraph", &ComputeMorseGraph);
   m.def("MorseGraphIntvalMap", &MorseGraphIntvalMap);
