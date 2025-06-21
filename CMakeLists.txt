@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.15...3.26)
 
 project(CMGDB)
 
@@ -22,7 +22,9 @@ if(APPLE)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -stdlib=libc++")
 endif()
 
-add_subdirectory(pybind11)
+set(PYBIND11_FINDPYTHON ON)
+
+find_package(pybind11 CONFIG REQUIRED)
 
 # set(CMAKE_TOOLCHAIN_FILE C:/vcpkg/scripts/buildsystems/vcpkg.cmake)
 
