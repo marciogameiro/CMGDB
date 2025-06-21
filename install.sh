@@ -1,6 +1,4 @@
-
+# Installer script
 rm -rf build
-
-git submodule update --init --recursive
-pip uninstall -y CMGDB &> /dev/null || true
-pip install . --upgrade --no-deps --force-reinstall --no-cache-dir $@
+rm -rf dist
+pip install . --force-reinstall --no-deps --no-cache-dir
