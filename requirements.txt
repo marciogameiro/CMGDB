@@ -1,3 +1,0 @@
-numpy>=1.19
-matplotlib>=3.3
-graphviz>=0.16
