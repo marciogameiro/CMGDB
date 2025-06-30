@@ -781,10 +781,10 @@ int RelativeSelfMapHomology (RelativeMapHomology_t * output,
     Matrix G = chainsToMatrix ( codomain_morse_gen [ d ], codomain_morse, d );
     Matrix Z = chainsToMatrix ( codomain_cycles [ d ], codomain_morse, d );
     Matrix MapHom = SmithSolve (G, Z);
-    if ( MapHom . number_of_rows () != 0 ) {
-      std::cout << "Dimension " << d << std::endl;
-      print_matrix (MapHom);
-    }
+    // if ( MapHom . number_of_rows () != 0 ) {
+    //   std::cout << "Dimension " << d << std::endl;
+    //   print_matrix (MapHom);
+    // }
     output -> push_back ( MapHom );
   }
   for ( int d = codomain_morse . dimension () + 1; d <= D; ++ d ) {

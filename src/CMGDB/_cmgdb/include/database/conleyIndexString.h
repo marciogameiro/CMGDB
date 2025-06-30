@@ -56,16 +56,15 @@ conleyIndexString ( const chomp::ConleyIndex_t & ci,
                     int * errorcode = NULL,
                     int time_out = 3600 ) {
   if ( errorcode != NULL ) * errorcode = 0;
-  std::cout << "conleyIndexString.\n";
+  // std::cout << "conleyIndexString.\n";
   std::vector<std::string> result;
   if ( ci . undefined () ) { 
-    std::cout << "conleyIndexString. undefined.\n";
+    // std::cout << "conleyIndexString. undefined.\n";
     if ( errorcode != NULL ) * errorcode = 4;
     return result;
   }
   for ( unsigned int i = 0; i < ci . data () . size (); ++ i ) {
-    std::cout << "conleyIndexString. Dimension is " << i << "\n";
-    
+    // std::cout << "conleyIndexString. Dimension is " << i << "\n";
     typedef chomp::PolyRing<chomp::Ring> Polynomial;
 
     // use a thread to compute Frobenius Normal Form
@@ -84,7 +83,6 @@ conleyIndexString ( const chomp::ConleyIndex_t & ci,
     }
     // end threading
 
-
     std::vector<Polynomial> shift_class = shiftClass ( invariant_factors );
 
     std::stringstream ss;
@@ -98,7 +96,7 @@ conleyIndexString ( const chomp::ConleyIndex_t & ci,
     }
 
     result . push_back ( ss . str () );
-    std::cout << "conleyIndexString. Wrote the polynomial " << ss . str () << "\n";
+    // std::cout << "conleyIndexString. Wrote the polynomial " << ss . str () << "\n";
   }
   return result;
 }
