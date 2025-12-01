@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import CMGDB
 
 def PlotMorseSets(morse_sets, morse_nodes=None, proj_dims=None, cmap=None, clist=None,
-                  fig_w=8, fig_h=8, xlim=None, ylim=None, axis_labels=True,
+                  scale_factor=None, fig_w=8, fig_h=8, xlim=None, ylim=None, axis_labels=True,
                   xlabel='$x$', ylabel='$y$', fontsize=15, fig_fname=None, dpi=300):
     # Check if morse_sets is a Morse graph, file name, or list
     if type(morse_sets) == CMGDB._cmgdb.MorseGraph: # Morse graph
@@ -26,15 +26,21 @@ def PlotMorseSets(morse_sets, morse_nodes=None, proj_dims=None, cmap=None, clist
         num_morse_sets = None
     # Plot Morse set boxes as a scatter plot
     PlotBoxesScatter(morse_sets, num_morse_sets=num_morse_sets, morse_nodes=morse_nodes,
-                     proj_dims=proj_dims, cmap=cmap, clist=clist, fig_w=fig_w, fig_h=fig_h,
-                     xlim=xlim, ylim=ylim, axis_labels=axis_labels, xlabel=xlabel,
-                     ylabel=ylabel, fontsize=fontsize, fig_fname=fig_fname, dpi=dpi)
+                     proj_dims=proj_dims, cmap=cmap, clist=clist, scale_factor=scale_factor,
+                     fig_w=fig_w, fig_h=fig_h, xlim=xlim, ylim=ylim, axis_labels=axis_labels,
+                     xlabel=xlabel, ylabel=ylabel, fontsize=fontsize, fig_fname=fig_fname, dpi=dpi)
 
 def PlotBoxesScatter(morse_sets, num_morse_sets=None, morse_nodes=None, proj_dims=None, cmap=None,
-                     clist=None, fig_w=8, fig_h=8, xlim=None, ylim=None, axis_labels=True,
-                     xlabel='$x$', ylabel='$y$', fontsize=15, fig_fname=None, dpi=300):
-    # Default colormap
-    default_cmap = matplotlib.cm.tab20
+                     clist=None, scale_factor=None, fig_w=8, fig_h=8, xlim=None, ylim=None,
+                     axis_labels=True, xlabel='$x$', ylabel='$y$', fontsize=15, fig_fname=None, dpi=300):
+    # Default color list
+    default_clist = ['#1f77b4', '#e6550d', '#31a354', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f',
+                     '#bcbd22', '#80b1d3', '#ffffb3', '#fccde5', '#b3de69', '#fdae6b', '#6a3d9a', '#c49c94',
+                     '#fb8072', '#dbdb8d', '#bc80bd', '#ffed6f', '#637939', '#c5b0d5', '#636363', '#c7c7c7',
+                     '#8dd3c7', '#b15928', '#e8cb32', '#9e9ac8', '#74c476', '#ff7f0e', '#9edae5', '#90d743',
+                     '#e7969c', '#17becf', '#7b4173', '#8ca252', '#ad494a', '#8c6d31', '#a55194', '#00cc49']
+    # # Default colormap
+    # default_cmap = matplotlib.cm.tab20
     rect = morse_sets[0]
     assert len(rect) % 2 == 1, "Wrong dimension in Morse sets data"
     dim = int((len(rect) - 1) / 2)
@@ -49,11 +55,25 @@ def PlotBoxesScatter(morse_sets, num_morse_sets=None, morse_nodes=None, proj_dim
         num_morse_sets = max([int(rect[-1]) for rect in morse_sets]) + 1
     if morse_nodes == None:
         morse_nodes = range(num_morse_sets)
-    # Set colormap to use
-    if clist and cmap == None:
-        cmap = matplotlib.colors.ListedColormap(clist[:num_morse_sets], name='clist')
+    if scale_factor == None:
+        scale_factor = [1]*num_morse_sets
+    # Set colormap for Morse sets
+    if cmap == None and clist == None:
+        clist = default_clist
     if cmap == None:
-        cmap = default_cmap
+        cmap = matplotlib.colors.ListedColormap(clist[:num_morse_sets])
+    # Get number of colors in the colormap
+    try:
+        # Colormap is listed colors colormap
+        num_colors = len(cmap.colors)
+    except:
+        num_colors = 0 # Colormap is "continuous"
+    if (num_colors > 0) and (num_colors < num_morse_sets):
+        # Make colormap cyclic
+        cmap_norm = lambda k: k % num_colors
+    else:
+        # Normalization for color map
+        cmap_norm = matplotlib.colors.Normalize(vmin=0, vmax=num_morse_sets-1)
     if proj_dims == None:
         d1 = 0
         d2 = 1
@@ -87,8 +107,6 @@ def PlotBoxesScatter(morse_sets, num_morse_sets=None, morse_nodes=None, proj_dim
     # Set axis limits
     ax.set_xlim([x_min, x_max])
     ax.set_ylim([y_min, y_max])
-    # Normalization for color map
-    cmap_norm = matplotlib.colors.Normalize(vmin=0, vmax=num_morse_sets-1)
     # The scatter plot in Matplotlib uses a marker size in points**2 units.
     # The relationship between points and pixels is 1 point = dpi/72 pixels,
     # hence multiplying by 72 / fig.dpi gives the number of pixels in the plot.
@@ -115,8 +133,8 @@ def PlotBoxesScatter(morse_sets, num_morse_sets=None, morse_nodes=None, proj_dim
             p2 = [rect[dim + d1], rect[dim + d2]]       # Upper point
             p = list((np.array(p1) + np.array(p2)) / 2) # Center point
             s = list((np.array(p2) - np.array(p1)))     # Rect size
-            s_x = (s0_x * s[0]) ** 2 # Scatter x-axis size
-            s_y = (s0_y * s[1]) ** 2 # Scatter y-axis size
+            s_x = (scale_factor[morse_node] * s0_x * s[0]) ** 2 # Scatter x-axis size
+            s_y = (scale_factor[morse_node] * s0_y * s[1]) ** 2 # Scatter y-axis size
             # Alternative way to set marker size in data units
             # s_x = (x_scale * s[0]) ** 2 # Scatter x-axis size
             # s_y = (y_scale * s[1]) ** 2 # Scatter y-axis size

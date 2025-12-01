@@ -11,27 +11,47 @@ import graphviz
 def PlotMorseGraph(morse_graph, cmap=None, clist=None, shape=None, margin=None):
     """Plot Morse graph using cmap as the colormap or clist
        as a list of colors to make a colormap."""
-
-    # Default colormap
-    default_cmap = matplotlib.cm.tab20
+    # Default color list
+    default_clist = ['#1f77b4', '#e6550d', '#31a354', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f',
+                     '#bcbd22', '#80b1d3', '#ffffb3', '#fccde5', '#b3de69', '#fdae6b', '#6a3d9a', '#c49c94',
+                     '#fb8072', '#dbdb8d', '#bc80bd', '#ffed6f', '#637939', '#c5b0d5', '#636363', '#c7c7c7',
+                     '#8dd3c7', '#b15928', '#e8cb32', '#9e9ac8', '#74c476', '#ff7f0e', '#9edae5', '#90d743',
+                     '#e7969c', '#17becf', '#7b4173', '#8ca252', '#ad494a', '#8c6d31', '#a55194', '#00cc49']
+    # # Default colormap
+    # default_cmap = matplotlib.cm.tab20
     # Number of vertices
     num_verts = len(morse_graph.vertices())
     # Set defaults for unset values
-    if clist and cmap == None:
-        cmap = matplotlib.colors.ListedColormap(clist[:num_verts], name='clist')
-    if cmap == None:
-        cmap = default_cmap
     if shape == None:
         shape = 'ellipse'
     if margin == None:
         margin = '0.11, 0.055'
     margin = str(margin)
-
-    # Normalization for color map
-    cmap_norm = matplotlib.colors.Normalize(vmin=0, vmax=num_verts-1)
-
+    # Set colormap for Morse graph
+    if cmap == None and clist == None:
+        clist = default_clist
+    if cmap == None:
+        cmap = matplotlib.colors.ListedColormap(clist[:num_verts])
+    # Get number of colors in the colormap
+    try:
+        # Colormap is listed colors colormap
+        num_colors = len(cmap.colors)
+    except:
+        num_colors = 0 # Colormap is "continuous"
+    if (num_colors > 0) and (num_colors < num_verts):
+        # Make colormap cyclic
+        cmap_norm = lambda k: k % num_colors
+    else:
+        # Normalization for color map
+        cmap_norm = matplotlib.colors.Normalize(vmin=0, vmax=num_verts-1)
     # Get list of attractors (nodes without children)
     attractors = [v for v in morse_graph.vertices() if len(morse_graph.adjacencies(v)) == 0]
+    # Get set of children nodes (nodes with a parent)
+    children_nodes = set()
+    for v in morse_graph.vertices():
+        children_nodes.update(morse_graph.adjacencies(v))
+    # Get list of repellers (nodes without parents)
+    repellers = list(set(morse_graph.vertices()).difference(children_nodes))
 
     def graphviz_string(graph):
         # Return graphviz string describing the graph
@@ -59,6 +79,12 @@ def PlotMorseGraph(morse_graph, cmap=None, clist=None, shape=None, margin=None):
         # Set rank for attractors
         gv += '{rank=same; '
         for v in attractors:
+            gv += str(v) + ' '
+        gv += '}; \n'
+
+        # Set rank for repellers
+        gv += '{rank=same; '
+        for v in repellers:
             gv += str(v) + ' '
         gv += '}; \n'
 
