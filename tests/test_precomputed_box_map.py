@@ -22,12 +22,29 @@ def f_scalar(x):
     return list(f_vec(np.array([x]))[0])
 
 
+# Map using only IEEE-exact operations (+, -, *, /): unlike np.exp -- whose
+# SIMD (large batch) and scalar (single point) code paths may differ in the
+# last ulp on some platforms -- this map is bit-identical for any evaluation
+# batching, so lookups can be asserted strictly equal to live evaluation.
+def g_vec(X):
+    return X * (90.0 - X) / 45.0
+
+
+def g_scalar(x):
+    return list(g_vec(np.array([x]))[0])
+
+
 SUBDIV_MAX = 12
 
 
 @pytest.fixture(scope="module")
 def F_pre():
     return CMGDB.PrecomputedBoxMap(f_vec, LOWER_BOUNDS, UPPER_BOUNDS, SUBDIV_MAX)
+
+
+@pytest.fixture(scope="module")
+def G_pre():
+    return CMGDB.PrecomputedBoxMap(g_vec, LOWER_BOUNDS, UPPER_BOUNDS, SUBDIV_MAX)
 
 
 def dyadic_boxes(F, rng, count):
@@ -49,18 +66,29 @@ def dyadic_boxes(F, rng, count):
     return boxes
 
 
-def test_corner_mode_exact_vs_live_boxmap(F_pre):
+def test_corner_mode_exact_vs_live_boxmap(G_pre):
     rng = np.random.default_rng(23)
-    for rect in dyadic_boxes(F_pre, rng, 200):
-        assert F_pre(rect) == CMGDB.BoxMap(f_scalar, rect)
+    for rect in dyadic_boxes(G_pre, rng, 200):
+        assert G_pre(rect) == CMGDB.BoxMap(g_scalar, rect)
 
 
-def test_corner_mode_with_padding_exact(F_pre):
-    F_pad = CMGDB.PrecomputedBoxMap(f_vec, LOWER_BOUNDS, UPPER_BOUNDS, SUBDIV_MAX,
+def test_corner_mode_with_padding_exact(G_pre):
+    G_pad = CMGDB.PrecomputedBoxMap(g_vec, LOWER_BOUNDS, UPPER_BOUNDS, SUBDIV_MAX,
                                     padding=True)
     rng = np.random.default_rng(29)
-    for rect in dyadic_boxes(F_pad, rng, 100):
-        assert F_pad(rect) == CMGDB.BoxMap(f_scalar, rect, padding=True)
+    for rect in dyadic_boxes(G_pad, rng, 100):
+        assert G_pad(rect) == CMGDB.BoxMap(g_scalar, rect, padding=True)
+
+
+def test_corner_mode_close_for_exp_map(F_pre):
+    # np.exp evaluated in a large batch may differ from single-point
+    # evaluation in the last ulp (SIMD vs scalar code paths), so for maps
+    # using transcendental functions the guarantee is agreement up to
+    # floating-point evaluation-batching effects
+    rng = np.random.default_rng(23)
+    for rect in dyadic_boxes(F_pre, rng, 200):
+        assert np.allclose(F_pre(rect), CMGDB.BoxMap(f_scalar, rect),
+                           rtol=1e-12, atol=1e-12)
 
 
 def test_center_mode_matches_live(F_pre):
@@ -72,9 +100,9 @@ def test_center_mode_matches_live(F_pre):
         assert np.allclose(F_center(rect), expected, rtol=1e-12, atol=1e-12)
 
 
-def test_whole_domain_box(F_pre):
+def test_whole_domain_box(G_pre):
     rect = list(LOWER_BOUNDS) + list(UPPER_BOUNDS)
-    assert F_pre(rect) == CMGDB.BoxMap(f_scalar, rect)
+    assert G_pre(rect) == CMGDB.BoxMap(g_scalar, rect)
 
 
 def test_batch_matches_scalar(F_pre):
@@ -86,9 +114,11 @@ def test_batch_matches_scalar(F_pre):
 
 
 def test_chunking_identical():
-    small_chunks = CMGDB.PrecomputedBoxMap(f_vec, LOWER_BOUNDS, UPPER_BOUNDS, 8,
+    # Chunk boundaries must not change the table (exact-arithmetic map, so
+    # SIMD batching effects cannot mask a real chunking bug)
+    small_chunks = CMGDB.PrecomputedBoxMap(g_vec, LOWER_BOUNDS, UPPER_BOUNDS, 8,
                                            batch_points=100)
-    auto_chunks = CMGDB.PrecomputedBoxMap(f_vec, LOWER_BOUNDS, UPPER_BOUNDS, 8)
+    auto_chunks = CMGDB.PrecomputedBoxMap(g_vec, LOWER_BOUNDS, UPPER_BOUNDS, 8)
     assert np.array_equal(small_chunks._table, auto_chunks._table)
 
 
