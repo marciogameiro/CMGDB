@@ -37,12 +37,16 @@ import json
 import math
 import os
 import platform
-import resource
 import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
+
+try:
+    import resource  # Unix only; peak-RSS reporting is skipped on Windows
+except ImportError:
+    resource = None
 
 BENCH_DIR = Path(__file__).resolve().parent
 REPO_DIR = BENCH_DIR.parent
@@ -494,9 +498,12 @@ def run_child(name, repeat, out_path):
             print(f"ERROR: scenario {name} is nondeterministic across repetitions",
                   file=sys.stderr)
             return 2
-    maxrss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    # ru_maxrss is bytes on macOS, kilobytes on Linux
-    maxrss_mb = maxrss / 1e6 if sys.platform == "darwin" else maxrss / 1e3
+    if resource is not None:
+        maxrss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        # ru_maxrss is bytes on macOS, kilobytes on Linux
+        maxrss_mb = maxrss / 1e6 if sys.platform == "darwin" else maxrss / 1e3
+    else:
+        maxrss_mb = 0.0  # not measured on Windows
     payload = {
         "scenario": name,
         "wall_times": wall_times,
