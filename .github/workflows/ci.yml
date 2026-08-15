@@ -1,0 +1,60 @@
+# Continuous integration: build from source, run the test suite, and run
+# the benchmark quick suite as a correctness gate (it validates the computed
+# Morse graphs, reachability, and Conley indices against frozen references
+# in benchmarks/references.json and fails on any mismatch).
+#
+# Windows is deliberately not in this matrix: its Boost-from-source setup
+# takes ~10 minutes, and Windows builds are exercised (with tests, via
+# cibuildwheel's test-command) by the wheels workflow.
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libboost-all-dev libgmp-dev
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install boost gmp
+
+      - name: Build and install
+        run: pip install .
+
+      - name: Run tests
+        run: |
+          pip install pytest
+          pytest tests/ -q
+
+      - name: Benchmark correctness gate
+        run: python benchmarks/benchmark.py --repeat 1 --timeout 900

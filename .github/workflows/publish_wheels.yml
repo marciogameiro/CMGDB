@@ -1,0 +1,239 @@
+# Build wheels and publish the Python distribution package.
+# A push of a v* tag builds and publishes to PyPI.
+# A manual run (workflow_dispatch) builds and publishes to TestPyPI.
+name: Build and publish wheels
+
+on:
+  push:
+    tags:
+      - v* # Push events to v* tags
+  # Manual run
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  # Build wheels for Linux, macOS, and Windows.
+  # All CPython versions allowed by requires-python in pyproject.toml
+  # are built (cibuildwheel reads requires-python and skips the rest).
+  build_wheels:
+    name: Wheels for ${{ matrix.buildplat[0] }}-${{ matrix.buildplat[2] }}
+    runs-on: ${{ matrix.buildplat[0] }}
+
+    strategy:
+      # Build the other wheels even if one fails
+      fail-fast: false
+      matrix:
+        buildplat:
+          # macos-13 is intel, macos-14 is apple silicon
+          - [ubuntu-latest,  x86_64,  manylinux_x86_64 ]
+          # - [ubuntu-latest,  aarch64, manylinux_aarch64]
+          - [macos-13,       x86_64,  macosx_x86_64    ]
+          - [macos-14,       arm64,   macosx_arm64     ]
+          - [windows-latest, AMD64,   win_amd64        ]
+          # Not working on win_arm64 and win32 for now
+          # - [windows-latest, ARM64,   win_arm64        ]
+          # - [windows-latest, x86,     win32            ]
+        include:
+          # Configuration flag for target macOS
+          - buildplat: [macos-13,       x86_64,  macosx_x86_64    ]
+            macosx_deployment_target: 13.0
+          - buildplat: [macos-14,       arm64,   macosx_arm64     ]
+            macosx_deployment_target: 14.0
+
+    steps:
+      # The repository is self-contained: pyproject.toml (scikit-build-core)
+      # and CMakeLists.txt at the root are the build configuration, and
+      # sdsl-lite is vendored under src/CMGDB/_cmgdb/third_party/.
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python for Windows
+        if: runner.os == 'Windows'
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+
+      - name: Install boost for macOS Intel
+        if: matrix.buildplat[2] == 'macosx_x86_64'
+        id: install-boost-macos-intel
+        run: |
+          INSTALL_PREFIX="/Users/runner"
+          curl -L -o boost_1_88_0.tar.bz2 https://archives.boost.io/release/1.88.0/source/boost_1_88_0.tar.bz2
+          tar --bzip2 -xf boost_1_88_0.tar.bz2
+          cd boost_1_88_0
+          ./bootstrap.sh --prefix=${INSTALL_PREFIX}
+          ./b2 install -d0 -j4 --with-chrono --with-thread --with-serialization --with-date_time --with-atomic
+          echo "BOOST_ROOT=${INSTALL_PREFIX}" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Install boost for macOS ARM
+        if: matrix.buildplat[2] == 'macosx_arm64'
+        id: install-boost-macos-arm
+        run: |
+          INSTALL_PREFIX="/Users/runner"
+          curl -L -o boost_1_88_0.tar.bz2 https://archives.boost.io/release/1.88.0/source/boost_1_88_0.tar.bz2
+          tar --bzip2 -xf boost_1_88_0.tar.bz2
+          cd boost_1_88_0
+          ./bootstrap.sh --prefix=${INSTALL_PREFIX}
+          ./b2 install -d0 -j4 architecture=arm --with-chrono --with-thread --with-serialization --with-date_time --with-atomic
+          echo "BOOST_ROOT=${INSTALL_PREFIX}" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Install Boost for Windows
+        if: runner.os == 'Windows'
+        id: install-boost-windows
+        run: |
+          INSTALL_PREFIX="C:/boost"
+          curl -L -o boost_1_88_0.tar.bz2 https://archives.boost.io/release/1.88.0/source/boost_1_88_0.tar.bz2
+          tar --bzip2 -xf boost_1_88_0.tar.bz2
+          cd boost_1_88_0
+          ./bootstrap.sh --prefix=${INSTALL_PREFIX}
+          ./b2 install -d0 -j4 toolset=msvc --with-chrono --with-thread --with-serialization --with-date_time --with-atomic
+          echo "BOOST_ROOT=${INSTALL_PREFIX}" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Set BOOST_ROOT
+        id: set-boost-root
+        run: |
+          if [ "${{ matrix.buildplat[2] }}" = "macosx_x86_64" ]; then
+            echo "BOOST_ROOT=${{ steps.install-boost-macos-intel.outputs.BOOST_ROOT }}" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.buildplat[2] }}" = "win_amd64" ]; then
+            echo "BOOST_ROOT=${{ steps.install-boost-windows.outputs.BOOST_ROOT }}" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.buildplat[2] }}" = "macosx_arm64" ]; then
+            echo "BOOST_ROOT=${{ steps.install-boost-macos-arm.outputs.BOOST_ROOT }}" >> $GITHUB_OUTPUT
+          else
+            echo "BOOST_ROOT=" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
+      # GMP headers (gmpxx.h) are needed at compile time; nothing links GMP
+      - name: Install GMP for macOS
+        if: runner.os == 'macOS'
+        run: |
+          brew install gmp
+        shell: bash
+
+      - name: Add msbuild to PATH
+        if: runner.os == 'Windows'
+        uses: microsoft/setup-msbuild@v3
+
+      - name: Install GMP for Windows
+        if: runner.os == 'Windows'
+        id: install-gmp-windows
+        run: |
+          vcpkg install gmp
+          # INCLUDE_DIR is C:/vcpkg/installed/x64-windows/include
+          # LIBRARY_DIR is C:/vcpkg/installed/x64-windows/lib
+          echo "GMP_ROOT=C:/vcpkg/installed/x64-windows" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Show library root directories
+        run: |
+          echo "BOOST_ROOT is " ${{ steps.set-boost-root.outputs.BOOST_ROOT }}
+          echo "GMP_ROOT is " ${{ steps.install-gmp-windows.outputs.GMP_ROOT }}
+        shell: bash
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v4.2.0
+        env:
+          CIBW_BUILD: cp*-${{ matrix.buildplat[2] }}
+          CIBW_ARCHS: ${{ matrix.buildplat[1] }}
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macosx_deployment_target }}
+          CIBW_ENVIRONMENT_WINDOWS: >
+            BOOST_ROOT=${{ steps.set-boost-root.outputs.BOOST_ROOT }}
+            GMP_ROOT=${{ steps.install-gmp-windows.outputs.GMP_ROOT }}
+          CIBW_ENVIRONMENT_MACOS: >
+            BOOST_ROOT=${{ steps.set-boost-root.outputs.BOOST_ROOT }}
+            MACOSX_DEPLOYMENT_TARGET=${{ matrix.macosx_deployment_target }}
+          CIBW_BEFORE_ALL_LINUX: >
+            curl -L -o boost_1_88_0.tar.bz2 https://archives.boost.io/release/1.88.0/source/boost_1_88_0.tar.bz2 &&
+            tar --bzip2 -xf boost_1_88_0.tar.bz2 && cd boost_1_88_0 && ./bootstrap.sh --prefix=/usr/local &&
+            ./b2 install -d0 -j4 --with-chrono --with-thread --with-serialization --with-date_time --with-atomic &&
+            ls -l /usr/local &&
+            yum install -y gmp-devel
+          CIBW_BEFORE_BUILD_WINDOWS: pip install delvewheel
+          CIBW_REPAIR_WHEEL_COMMAND_MACOS: >
+            DYLD_LIBRARY_PATH=${BOOST_ROOT}/lib delocate-listdeps {wheel} &&
+            DYLD_LIBRARY_PATH=${BOOST_ROOT}/lib delocate-wheel --require-archs {delocate_archs} -w {dest_dir} {wheel}
+          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: delvewheel repair -w {dest_dir} {wheel}
+        with:
+          output-dir: wheelhouse
+
+      - name: Show files
+        run: ls -lh wheelhouse
+        shell: bash
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: cibw-wheels-${{ matrix.buildplat[0] }}-${{ matrix.buildplat[1] }}-${{ strategy.job-index }}
+          path: wheelhouse/*.whl
+
+  # Build source distribution on Linux
+  build_sdist:
+    name: Build SDist
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v7
+
+    - name: Build source tarball
+      run: pipx run build --sdist
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v7
+      with:
+        name: cibw-sdist
+        path: dist/*.tar.gz
+
+  # Manual runs publish to TestPyPI (trusted publishing must be configured
+  # for this repository on test.pypi.org)
+  upload_testpypi:
+    if: github.event_name == 'workflow_dispatch'
+    name: Upload to TestPyPI
+    needs: [build_wheels, build_sdist]
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      id-token: write
+
+    steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v8
+      with:
+        pattern: cibw-*
+        path: dist
+        merge-multiple: true
+
+    - name: Publish package to TestPyPI
+      uses: pypa/gh-action-pypi-publish@v1.14.2
+      with:
+        repository-url: https://test.pypi.org/legacy/
+        attestations: false
+
+  # Tag pushes publish to PyPI. The 'pypi' GitHub environment can be given
+  # required reviewers in the repository settings to gate releases manually.
+  upload_pypi:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+    name: Upload to PyPI
+    needs: [build_wheels, build_sdist]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+
+    steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v8
+      with:
+        pattern: cibw-*
+        path: dist
+        merge-multiple: true
+
+    - name: Publish package to PyPI
+      uses: pypa/gh-action-pypi-publish@v1.14.2
+      with:
+        attestations: true
