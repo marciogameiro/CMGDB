@@ -1,0 +1,373 @@
+{
+ "meta": {
+  "timestamp": "2026-08-15T02:04:37",
+  "platform": "macOS-10.16-x86_64-i386-64bit",
+  "machine": "x86_64",
+  "python": "3.11.11",
+  "numpy": "1.26.4",
+  "cmgdb_version": "1.3.2",
+  "git_sha": "857ec8b",
+  "git_dirty": true,
+  "cpu": "Intel(R) Core(TM) i7-8750H CPU @ 2.20GHz"
+ },
+ "results": {
+  "leslie2d_python": {
+   "scenario": "leslie2d_python",
+   "wall_times": [
+    4.060858440003358,
+    3.6099327860283665,
+    3.6690277900197543
+   ],
+   "map_calls": [
+    252088,
+    252088,
+    252088
+   ],
+   "map_seconds": [
+    2.4026473378762603,
+    2.420370727952104,
+    2.4659643712220713
+   ],
+   "maxrss_mb": 105.459712,
+   "reference": {
+    "num_vertices": 2,
+    "morse_set_sizes": [
+     1,
+     45372
+    ],
+    "morse_set_min_box": [
+     0,
+     781
+    ],
+    "edges_unreduced": [
+     [
+      0,
+      1
+     ]
+    ],
+    "phase_space_size": 63040
+   },
+   "status": "OK"
+  },
+  "leslie3d_python": {
+   "scenario": "leslie3d_python",
+   "wall_times": [
+    4.022721980989445,
+    3.5932193310000002,
+    3.5526446140138432
+   ],
+   "map_calls": [
+    152218,
+    152218,
+    152218
+   ],
+   "map_seconds": [
+    2.6644645080086775,
+    2.6924359097029082,
+    2.6625961654935963
+   ],
+   "maxrss_mb": 85.68832,
+   "reference": {
+    "num_vertices": 2,
+    "morse_set_sizes": [
+     1,
+     16724
+    ],
+    "morse_set_min_box": [
+     0,
+     141
+    ],
+    "edges_unreduced": [
+     [
+      0,
+      1
+     ]
+    ],
+    "phase_space_size": 38070
+   },
+   "status": "OK"
+  },
+  "leslie2d_data": {
+   "scenario": "leslie2d_data",
+   "wall_times": [
+    4.599641122971661,
+    4.165231438993942,
+    4.208330146037042
+   ],
+   "map_calls": [
+    23376,
+    23376,
+    23376
+   ],
+   "map_seconds": [
+    3.941529145347886,
+    3.9645179390790872,
+    4.007803876767866
+   ],
+   "maxrss_mb": 62.11584,
+   "reference": {
+    "num_vertices": 4,
+    "morse_set_sizes": [
+     3,
+     581,
+     3,
+     2
+    ],
+    "morse_set_min_box": [
+     15,
+     80,
+     139,
+     334
+    ],
+    "edges_unreduced": [
+     [
+      1,
+      0
+     ],
+     [
+      1,
+      2
+     ],
+     [
+      1,
+      3
+     ],
+     [
+      2,
+      0
+     ]
+    ],
+    "phase_space_size": 2332
+   },
+   "status": "OK"
+  },
+  "leslie2d_interval": {
+   "scenario": "leslie2d_interval",
+   "wall_times": [
+    2.4268008529907092,
+    1.961382282024715,
+    1.9351291049970314
+   ],
+   "map_calls": [
+    0,
+    0,
+    0
+   ],
+   "map_seconds": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "maxrss_mb": 127.254528,
+   "reference": {
+    "num_vertices": 4,
+    "morse_set_sizes": [
+     1,
+     1608,
+     55100,
+     236
+    ],
+    "morse_set_min_box": [
+     0,
+     84,
+     860,
+     1520
+    ],
+    "edges_unreduced": [
+     [
+      0,
+      1
+     ],
+     [
+      0,
+      2
+     ],
+     [
+      0,
+      3
+     ],
+     [
+      3,
+      1
+     ],
+     [
+      3,
+      2
+     ]
+    ]
+   },
+   "status": "OK"
+  },
+  "leslie2d_conley": {
+   "scenario": "leslie2d_conley",
+   "wall_times": [
+    5.738571155001409,
+    5.231965088983998,
+    5.207043228961993
+   ],
+   "map_calls": [
+    297454,
+    297454,
+    297454
+   ],
+   "map_seconds": [
+    2.887546284298878,
+    2.871971024433151,
+    2.869823931658175
+   ],
+   "maxrss_mb": 195.612672,
+   "reference": {
+    "num_vertices": 2,
+    "morse_set_sizes": [
+     1,
+     45372
+    ],
+    "morse_set_min_box": [
+     0,
+     781
+    ],
+    "edges_unreduced": [
+     [
+      0,
+      1
+     ]
+    ],
+    "conley_indices": [
+     [
+      "0",
+      "0",
+      "0"
+     ],
+     [
+      "x-1",
+      "0",
+      "0"
+     ]
+    ],
+    "phase_space_size": 63040
+   },
+   "status": "OK"
+  },
+  "leslie2d_python_deep": {
+   "scenario": "leslie2d_python_deep",
+   "wall_times": [
+    34.27866792702116
+   ],
+   "map_calls": [
+    2287578
+   ],
+   "map_seconds": [
+    22.31318599404767
+   ],
+   "maxrss_mb": 457.633792,
+   "reference": {
+    "num_vertices": 2,
+    "morse_set_sizes": [
+     1,
+     451595
+    ],
+    "morse_set_min_box": [
+     0,
+     3361
+    ],
+    "edges_unreduced": [
+     [
+      0,
+      1
+     ]
+    ],
+    "phase_space_size": 571980
+   },
+   "status": "OK"
+  },
+  "leslie3d_python_deep": {
+   "scenario": "leslie3d_python_deep",
+   "wall_times": [
+    10.185635067988187
+   ],
+   "map_calls": [
+    411588
+   ],
+   "map_seconds": [
+    7.236189596587792
+   ],
+   "maxrss_mb": 119.627776,
+   "reference": {
+    "num_vertices": 2,
+    "morse_set_sizes": [
+     1,
+     35818
+    ],
+    "morse_set_min_box": [
+     0,
+     241
+    ],
+    "edges_unreduced": [
+     [
+      0,
+      1
+     ]
+    ],
+    "phase_space_size": 102955
+   },
+   "status": "OK"
+  },
+  "leslie4d_python": {
+   "scenario": "leslie4d_python",
+   "wall_times": [
+    10.788668937981129
+   ],
+   "map_calls": [
+    248002
+   ],
+   "map_seconds": [
+    8.259343858342618
+   ],
+   "maxrss_mb": 95.358976,
+   "reference": {
+    "num_vertices": 2,
+    "morse_set_sizes": [
+     1,
+     28121
+    ],
+    "morse_set_min_box": [
+     0,
+     140
+    ],
+    "edges_unreduced": [
+     [
+      0,
+      1
+     ]
+    ],
+    "phase_space_size": 62024
+   },
+   "status": "OK"
+  },
+  "leslie2d_data_large": {
+   "scenario": "leslie2d_data_large",
+   "wall_times": [
+    116.99749718199018
+   ],
+   "map_calls": [
+    49876
+   ],
+   "map_seconds": [
+    116.14543930831132
+   ],
+   "maxrss_mb": 70.160384,
+   "reference": {
+    "num_vertices": 1,
+    "morse_set_sizes": [
+     3331
+    ],
+    "morse_set_min_box": [
+     9
+    ],
+    "edges_unreduced": [],
+    "phase_space_size": 4272
+   },
+   "status": "OK"
+  }
+ }
+}
