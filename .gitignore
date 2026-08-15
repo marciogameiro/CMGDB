@@ -42,3 +42,6 @@ __pycache__
 
 # Emacs backup files
 *~
+
+# Transient benchmark comparison runs
+benchmarks/after_*.json
