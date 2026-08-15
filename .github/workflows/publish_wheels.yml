@@ -26,20 +26,21 @@ jobs:
       fail-fast: false
       matrix:
         buildplat:
-          # macos-13 is intel, macos-14 is apple silicon
-          - [ubuntu-latest,  x86_64,  manylinux_x86_64 ]
-          # - [ubuntu-latest,  aarch64, manylinux_aarch64]
-          - [macos-13,       x86_64,  macosx_x86_64    ]
-          - [macos-14,       arm64,   macosx_arm64     ]
-          - [windows-latest, AMD64,   win_amd64        ]
-          # Not working on win_arm64 and win32 for now
-          # - [windows-latest, ARM64,   win_arm64        ]
-          # - [windows-latest, x86,     win32            ]
+          # Linux: x86_64 plus native aarch64 (ubuntu-24.04-arm runner, no QEMU)
+          - [ubuntu-latest,   x86_64,  manylinux_x86_64 ]
+          - [ubuntu-24.04-arm, aarch64, manylinux_aarch64]
+          # macOS: macos-15-intel is the last Intel runner, macos-latest is Apple silicon
+          - [macos-15-intel,  x86_64,  macosx_x86_64    ]
+          - [macos-latest,    arm64,   macosx_arm64     ]
+          # Windows: win_amd64 covers both Intel and AMD 64-bit CPUs;
+          # win_arm64 builds natively on the windows-11-arm runner
+          - [windows-latest,  AMD64,   win_amd64        ]
+          - [windows-11-arm,  ARM64,   win_arm64        ]
         include:
           # Configuration flag for target macOS
-          - buildplat: [macos-13,       x86_64,  macosx_x86_64    ]
+          - buildplat: [macos-15-intel,  x86_64,  macosx_x86_64    ]
             macosx_deployment_target: 13.0
-          - buildplat: [macos-14,       arm64,   macosx_arm64     ]
+          - buildplat: [macos-latest,    arm64,   macosx_arm64     ]
             macosx_deployment_target: 14.0
 
     steps:
@@ -123,10 +124,14 @@ jobs:
         if: runner.os == 'Windows'
         id: install-gmp-windows
         run: |
+          # vcpkg's default triplet follows the runner architecture
+          if [ "${{ matrix.buildplat[1] }}" = "ARM64" ]; then
+            TRIPLET=arm64-windows
+          else
+            TRIPLET=x64-windows
+          fi
           vcpkg install gmp
-          # INCLUDE_DIR is C:/vcpkg/installed/x64-windows/include
-          # LIBRARY_DIR is C:/vcpkg/installed/x64-windows/lib
-          echo "GMP_ROOT=C:/vcpkg/installed/x64-windows" >> $GITHUB_OUTPUT
+          echo "GMP_ROOT=C:/vcpkg/installed/${TRIPLET}" >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Show library root directories
@@ -138,6 +143,9 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v4.2.0
         env:
+          # win_arm64 wheel tests are skipped until the dependency wheels
+          # (numpy/matplotlib) are reliably available for that platform
+          CIBW_TEST_SKIP: '*-win_arm64'
           CIBW_BUILD: cp*-${{ matrix.buildplat[2] }}
           CIBW_ARCHS: ${{ matrix.buildplat[1] }}
           MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macosx_deployment_target }}
