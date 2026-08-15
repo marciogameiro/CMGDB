@@ -14,6 +14,17 @@
 
 #define DEBUGPRINT if(0)
 
+// Reachability group codes: each bit of a code word tracks whether one Morse
+// set of the current group reaches a given vertex, so a wider word halves the
+// number of graph sweeps computeReachability needs when there are many Morse
+// sets. Use 128-bit words where the compiler provides them (GCC/Clang).
+#if defined(__SIZEOF_INT128__)
+typedef unsigned __int128 reach_code_t;
+#else
+typedef uint64_t reach_code_t;
+#endif
+constexpr int REACH_CODE_BITS = sizeof ( reach_code_t ) * 8;
+
 #ifdef MEMORYBOOKKEEPING
 uint64_t max_scc_memory_internal = 0;
 uint64_t max_scc_memory_external = 0;
@@ -22,12 +33,17 @@ uint64_t graph_memory = 0;
 uint64_t max_graph_memory = 0;
 #endif
 
-inline void 
+inline void
 computeMorseSetsAndReachability (std::vector< std::shared_ptr<Grid> > * output,
                                  std::vector<std::vector<unsigned int> > * reach,
                                  std::shared_ptr<const Grid> G,
-                                 std::shared_ptr<const Map> f ) {
-  MapGraph mapgraph ( G, f );
+                                 std::shared_ptr<const Map> f,
+                                 MapGraphOptions options ) {
+  // Structural intent: with options.cache the transition graph is computed
+  // once here (inside the MapGraph constructor) and shared by the strong
+  // component and reachability passes below, so the map f is evaluated at
+  // most once per grid element per subdivision level.
+  MapGraph mapgraph ( G, f, options );
   // Produce Strong Components and Reachability
   std::vector < std::deque < Grid::GridElement > > components;
   std::deque < Grid::size_type > topological_sort;
@@ -118,12 +134,12 @@ void computeStrongComponents (std::vector<std::deque<typename Graph::Vertex> > *
             preorder [ u ] = n;
             int64_t low = n;
             ++ n;
-            std::vector<Vertex> W =  G . adjacencies ( u );
+            auto W =  G . adjacency_span ( u );
 #ifdef MEMORYBOOKKEEPING
             graph_memory += sizeof(Vertex) * (1 + W . size ());
 #endif
             E += W . size ();
-            BOOST_FOREACH ( int64_t w, W ) {
+            for ( int64_t w : W ) {
               if ( u == w ) self_connected [ u ] = true;
               if ( explored [ w ] ) {
                 if ( not committed [ w ] ) {
@@ -223,8 +239,8 @@ void computeReachability ( std::vector < std::vector < unsigned int > > * output
     } 
   } 
 
-  // Break the Morse Sets up into Computational Groups of 64 and proceed 
-  size_type groups = ( (number_of_morse_sets - 1) / 64 ) + 1;
+  // Break the Morse Sets up into machine-word-sized Computational Groups and proceed
+  size_type groups = ( (number_of_morse_sets - 1) / REACH_CODE_BITS ) + 1;
   
 #ifdef CMG_VERBOSE
   size_type total_work_to_do = topological_sort . size () * groups;
@@ -233,17 +249,17 @@ void computeReachability ( std::vector < std::vector < unsigned int > > * output
   // information about which morse sets can reach a given vertex.
   // By processing in topological order, it is possible to give morse_code
   // the correct values in a single pass.
-  std::vector < uint64_t > morse_code;
+  std::vector < reach_code_t > morse_code;
   // We use a vector called condensed_code in order to store the final information
   // about which morse sets can reach a given morse set. It can be inferred from morse_code
   // during the same sweep in which we construct morse_code.
-  std::vector < uint64_t > condensed_code;
+  std::vector < reach_code_t > condensed_code;
   // Loop through groups.
   for ( size_type group_number = 0; group_number < groups; ++ group_number ) {
     ++ effort;
-    size_type group_size = std::min((size_type) 64, 
-          (size_type) number_of_morse_sets - ((size_type)64) * group_number);
-    size_type offset = 64L * group_number;
+    size_type group_size = std::min((size_type) REACH_CODE_BITS,
+          (size_type) number_of_morse_sets - ((size_type) REACH_CODE_BITS) * group_number);
+    size_type offset = ((size_type) REACH_CODE_BITS) * group_number;
     morse_code . clear ();
     morse_code . resize ( G . num_vertices (), 0 );
     condensed_code . clear ();
@@ -253,7 +269,7 @@ void computeReachability ( std::vector < std::vector < unsigned int > > * output
     // We do an initial sweep painting the sources onto their sets. 
     for ( size_type count = 0; count < group_size; ++ count ) {
       size_type set_number = offset + count;
-      uint64_t code = ((uint64_t)1) << count;
+      reach_code_t code = ((reach_code_t)1) << count;
       ++ effort;    
       BOOST_FOREACH ( size_type v, morse_sets [ set_number ] ) {
         ++ effort;
@@ -274,11 +290,11 @@ void computeReachability ( std::vector < std::vector < unsigned int > > * output
       }
 #endif
       size_type v = topological_sort [ vi ];
-      std::vector < size_type > children = G . adjacencies ( v ); // previously const &
+      auto children = G . adjacency_span ( v );
       if ( morse_paint [ v ] != number_of_morse_sets ) {
         morse_code [ v ] |= condensed_code [ morse_paint [ v ] ];
       }
-      BOOST_FOREACH ( size_type w, children ) {
+      for ( size_type w : children ) {
         ++ effort;
         morse_code [ w ] |= morse_code [ v ];
         condensed_code [ morse_paint [ w ] ] |= morse_code [ v ];
@@ -295,9 +311,9 @@ void computeReachability ( std::vector < std::vector < unsigned int > > * output
     for ( size_type count = 0; count < number_of_morse_sets; ++ count ) {
       // Read condensed code to determine which of the group reached this morse set
       ++ effort;
-      uint64_t bit = 1;
-      for ( int i = 0; i < 64; ++ i ) {
-        ++ effort;     
+      reach_code_t bit = 1;
+      for ( size_type i = 0; i < group_size; ++ i ) {
+        ++ effort;
         if ( condensed_code [ count ] & bit ) {
           ++ effort;
           (*output)[offset + i] . push_back ( count );

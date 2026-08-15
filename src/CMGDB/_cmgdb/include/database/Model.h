@@ -142,6 +142,13 @@ class Model {
   ///   to parameter p
   void setmap ( std::shared_ptr<Parameter> p );
 
+  /// set_batch_map
+  ///   Attach a batched evaluator for the map F this model was constructed
+  ///   with. The batched evaluator must agree with F on every rectangle; it
+  ///   exists so many rectangles can be evaluated per call. Requires a model
+  ///   constructed with a map function F.
+  void set_batch_map ( ModelMapF::BatchFunction const& F_batch );
+
   /// map
   ///   return a shared ptr to a map function object corresponding to 
   ///   parameter p
@@ -527,6 +534,16 @@ Model::setmap ( std::shared_ptr<Parameter> p ) {
   map_ . reset ( new ModelMap ( p ) );
 }
 
+inline void
+Model::set_batch_map ( ModelMapF::BatchFunction const& F_batch ) {
+  std::shared_ptr<ModelMapF> map_f = std::dynamic_pointer_cast<ModelMapF> ( map_ );
+  if ( not map_f ) {
+    throw std::logic_error ( "Model::set_batch_map requires a model "
+                             "constructed with a map function F.\n" );
+  }
+  map_f -> set_batch_map ( F_batch );
+}
+
 // inline std::shared_ptr < const Map >
 // Model::map ( std::function<std::vector<double>(std::vector<double>)> const& F ) const { 
 //   return std::shared_ptr < Map > ( new ModelMapF ( command_line_parameter_, F ) );
@@ -569,6 +586,7 @@ Model::annotate( MorseGraph * mg_in ) const {
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/numpy.h>
 namespace py = pybind11;
 
 inline void
@@ -599,6 +617,36 @@ ModelBinding(py::module &m) {
     .def("parameterSpace", &Model::parameterSpace)
     .def("phaseSpace", &Model::phaseSpace)
     .def("setmap", &Model::setmap)
+    .def("set_batch_map", [](Model & model, py::function F_batch_py) {
+      // Wrap the Python batch map as a flat-buffer evaluator. The rectangle
+      // buffer is exposed to Python as a zero-copy, read-only NumPy array of
+      // shape (count, 2*dim); the view is valid only during the call.
+      model . set_batch_map (
+        [F_batch_py](const std::vector<double> & rects, uint64_t count,
+                     uint64_t dim, std::vector<double> & images) {
+          py::gil_scoped_acquire gil;
+          py::array_t<double> rects_array (
+            { (py::ssize_t) count, (py::ssize_t) (2 * dim) },
+            { (py::ssize_t) (2 * dim * sizeof(double)), (py::ssize_t) sizeof(double) },
+            rects . data (),
+            py::capsule ( rects . data (), [](void *){} ) );
+          rects_array . attr ( "setflags" ) ( py::arg ( "write" ) = false );
+          py::object result = F_batch_py ( rects_array );
+          py::array_t<double, py::array::c_style | py::array::forcecast> images_array =
+            py::array_t<double, py::array::c_style | py::array::forcecast>::ensure ( result );
+          if ( not images_array ) {
+            throw std::runtime_error (
+              "The batch map must return an array-like of doubles" );
+          }
+          if ( (uint64_t) images_array . size () != count * 2 * dim ) {
+            throw std::runtime_error (
+              "The batch map returned the wrong number of values: "
+              "expected an array of shape (count, 2*dim)" );
+          }
+          const double * data = images_array . data ();
+          images . assign ( data, data + count * 2 * dim );
+        } );
+    })
     .def("param_dim", &Model::param_dim)
     .def("phase_dim", &Model::phase_dim)
     .def("phase_subdiv_min", &Model::phase_subdiv_min)

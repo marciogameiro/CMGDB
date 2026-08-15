@@ -6,7 +6,10 @@
 #include "EuclideanParameterSpace.h"
 #include "RectGeo.h"
 #include "simple_interval.h"
+#include <cstdint>
+#include <functional>
 #include <memory>
+#include <stdexcept>
 #include <vector>
 #include <algorithm>
 
@@ -19,10 +22,17 @@ public:
   // Map F
   std::function<std::vector<double>(std::vector<double>)> F;
 
+  // Optional batched map: evaluates count rectangles held in a flat buffer
+  // (count * 2 * dim doubles, lower bounds then upper bounds per rectangle)
+  // in a single call, writing the image rectangles in the same layout.
+  typedef std::function<void(const std::vector<double> &, uint64_t, uint64_t,
+                             std::vector<double> &)> BatchFunction;
+  BatchFunction F_batch;
+
   // Parameter variable
   // Not using parameters, but leave here for now
   interval p0;
-  
+
   // Constructor: sets parameter variables
   void assign ( RectGeo const& rectangle,
                 std::function<std::vector<double>(std::vector<double>)> const& F_map ) {
@@ -31,6 +41,15 @@ public:
 
     // Read parameter intervals from input rectangle
     p0 = getRectangleComponent ( rectangle, 0 );
+  }
+
+  // set_batch_map
+  //   Attach a batched evaluator for F. The batched evaluator must agree
+  //   with F on every rectangle; it exists purely so many rectangles can be
+  //   evaluated per call (e.g. one NumPy-vectorized Python call per chunk
+  //   instead of one Python call per rectangle).
+  void set_batch_map ( BatchFunction const& F_batch_map ) {
+    F_batch = F_batch_map;
   }
 
   // Map
@@ -84,6 +103,23 @@ public:
   operator () ( std::shared_ptr<Geo> geo ) const {
     return std::shared_ptr<Geo> ( new RectGeo (
         operator () ( * std::dynamic_pointer_cast<RectGeo> ( geo ) ) ) );
+  }
+
+  bool has_batch ( void ) const override {
+    return static_cast<bool> ( F_batch );
+  }
+
+  void batch_map ( const std::vector<double> & rects,
+                   uint64_t count,
+                   uint64_t dim,
+                   std::vector<double> & images ) const override {
+    if ( not F_batch ) {
+      throw std::logic_error ( "ModelMapF::batch_map called without a batch map set" );
+    }
+    F_batch ( rects, count, dim, images );
+    if ( images . size () != count * 2 * dim ) {
+      throw std::runtime_error ( "ModelMapF::batch_map: batch map returned wrong number of values" );
+    }
   }
 private:
   interval getRectangleComponent ( const RectGeo & rectangle, int d ) const {

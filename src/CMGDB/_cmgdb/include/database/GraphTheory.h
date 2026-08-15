@@ -6,6 +6,7 @@
 
 #include "Grid.h"
 #include "Map.h"
+#include "MapGraph.h"
 #include <vector>
 #include <queue>
 #include <memory>
@@ -14,7 +15,8 @@
 void computeMorseSetsAndReachability (std::vector< std::shared_ptr<Grid> > * output,
                                       std::vector<std::vector<unsigned int> > * reach,
                                       std::shared_ptr<const Grid> G,
-                                      std::shared_ptr<const Map> f );
+                                      std::shared_ptr<const Map> f,
+                                      MapGraphOptions options = MapGraphOptions ( true ) );
 
 /// computeStrongComponents
 ///    Modified version of Tarjan's algorithm devised by Shaun Harker

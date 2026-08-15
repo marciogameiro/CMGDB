@@ -47,7 +47,11 @@ ComputeConleyIndex ( const std::vector < uint64_t > & X_cubes,
   return conleyIndexString ( conley_index );
 }
 
-std::pair<MorseGraph, MapGraph> ComputeConleyMorseGraph ( Model const& model ) {
+std::pair<MorseGraph, MapGraph> ComputeConleyMorseGraph ( Model const& model,
+                                                          bool cache_transition_graph = true,
+                                                          uint64_t batch_chunk_size = 65536,
+                                                          uint64_t max_cached_edges = 0 ) {
+  MapGraphOptions options ( cache_transition_graph, batch_chunk_size, max_cached_edges );
   std::shared_ptr<const Map> map = model . map ();
   MorseGraph morsegraph ( model . phaseSpace () );
   std::shared_ptr < Grid > phase_space = morsegraph . phaseSpace ();
@@ -59,7 +63,8 @@ std::pair<MorseGraph, MapGraph> ComputeConleyMorseGraph ( Model const& model ) {
 
   // Compute Morse graph
   Compute_Morse_Graph ( & morsegraph, phase_space, map, phase_subdiv_init,
-                        phase_subdiv_min, phase_subdiv_max, phase_subdiv_limit );
+                        phase_subdiv_min, phase_subdiv_max, phase_subdiv_limit,
+                        options );
 
   std::shared_ptr < TreeGrid > phase_space_chomp =
     std::dynamic_pointer_cast<TreeGrid> ( morsegraph . phaseSpace () );
@@ -83,7 +88,11 @@ std::pair<MorseGraph, MapGraph> ComputeConleyMorseGraph ( Model const& model ) {
   return std::make_pair ( morsegraph, map_graph );
 }
 
-std::pair<MorseGraph, MapGraph> ComputeMorseGraph ( Model const& model ) {
+std::pair<MorseGraph, MapGraph> ComputeMorseGraph ( Model const& model,
+                                                    bool cache_transition_graph = true,
+                                                    uint64_t batch_chunk_size = 65536,
+                                                    uint64_t max_cached_edges = 0 ) {
+  MapGraphOptions options ( cache_transition_graph, batch_chunk_size, max_cached_edges );
   std::shared_ptr<const Map> map = model . map ();
   MorseGraph morsegraph ( model . phaseSpace () );
   std::shared_ptr < Grid > phase_space = morsegraph . phaseSpace ();
@@ -95,7 +104,8 @@ std::pair<MorseGraph, MapGraph> ComputeMorseGraph ( Model const& model ) {
 
   // Compute Morse graph
   Compute_Morse_Graph ( & morsegraph, phase_space, map, phase_subdiv_init,
-                        phase_subdiv_min, phase_subdiv_max, phase_subdiv_limit );
+                        phase_subdiv_min, phase_subdiv_max, phase_subdiv_limit,
+                        options );
 
   // Compute multi-valued map digraph
   MapGraph map_graph ( phase_space, map );
@@ -255,8 +265,16 @@ PYBIND11_MODULE(_cmgdb, m) {
   m.doc() = "Conley Morse Graph Database Module";
 
   m.def("ComputeConleyIndex", &ComputeConleyIndex);
-  m.def("ComputeConleyMorseGraph", &ComputeConleyMorseGraph);
-  m.def("ComputeMorseGraph", &ComputeMorseGraph);
+  m.def("ComputeConleyMorseGraph", &ComputeConleyMorseGraph,
+        py::arg("model"),
+        py::arg("cache_transition_graph") = true,
+        py::arg("batch_chunk_size") = 65536,
+        py::arg("max_cached_edges") = 0);
+  m.def("ComputeMorseGraph", &ComputeMorseGraph,
+        py::arg("model"),
+        py::arg("cache_transition_graph") = true,
+        py::arg("batch_chunk_size") = 65536,
+        py::arg("max_cached_edges") = 0);
   m.def("MorseGraphIntvalMap", &MorseGraphIntvalMap);
   m.def("MorseGraphMap", &MorseGraphMap);
 }
