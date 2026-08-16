@@ -204,9 +204,11 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v4.2.0
         env:
-          # cp315 wheels build fine but cannot be tested until matplotlib
-          # (a CMGDB dependency) ships cp315 wheels for the test env
-          CIBW_TEST_SKIP: 'cp315-*'
+          # These wheels build fine but their test env cannot be assembled
+          # on Windows: matplotlib (a CMGDB dependency) ships no cp315
+          # Windows wheels yet, and its win_arm64 wheels start at cp311
+          # (verified against PyPI; Linux and macOS cp315 test fine)
+          CIBW_TEST_SKIP: 'cp315-win_amd64 cp315t-win_amd64 cp310-win_arm64 cp315-win_arm64 cp315t-win_arm64'
           CIBW_BUILD: cp*-${{ matrix.buildplat[2] }}
           CIBW_ARCHS: ${{ matrix.buildplat[1] }}
           MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macosx_deployment_target }}
