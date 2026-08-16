@@ -284,6 +284,10 @@ jobs:
       with:
         repository-url: https://test.pypi.org/legacy/
         attestations: false
+        # (Test)PyPI filenames can never be reused, so ignore collisions with
+        # previously uploaded files; use a fresh (pre-release) version number
+        # when a complete upload of the current build is wanted
+        skip-existing: true
 
   # Tag pushes publish to PyPI. The 'pypi' GitHub environment can be given
   # required reviewers in the repository settings to gate releases manually.

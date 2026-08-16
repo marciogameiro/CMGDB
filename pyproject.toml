@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "CMGDB"
-version = "1.3.2"
+version = "1.4.0"
 description = "CMGDB (Conley Morse Graph Database) Python Extension"
 readme = "README.md"
 license = "MIT"
