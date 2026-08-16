@@ -1,6 +1,8 @@
 # Build wheels and publish the Python distribution package.
 # A push of a v* tag builds and publishes to PyPI.
-# A manual run (workflow_dispatch) builds and publishes to TestPyPI.
+# A manual run (workflow_dispatch) builds the wheels only; check the
+# "publish" box to also publish them to TestPyPI. The built wheels and
+# sdist are attached to the run as artifacts either way.
 name: Build and publish wheels
 
 on:
@@ -9,6 +11,11 @@ on:
       - v* # Push events to v* tags
   # Manual run
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish the built wheels to TestPyPI'
+        type: boolean
+        default: false
 
 env:
   BUILD_TYPE: Release
@@ -225,10 +232,11 @@ jobs:
         name: cibw-sdist
         path: dist/*.tar.gz
 
-  # Manual runs publish to TestPyPI (trusted publishing must be configured
-  # for this repository on test.pypi.org)
+  # Manual runs publish to TestPyPI only when the "publish" box is checked
+  # (trusted publishing must be configured for this repository on
+  # test.pypi.org)
   upload_testpypi:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
     name: Upload to TestPyPI
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-latest
