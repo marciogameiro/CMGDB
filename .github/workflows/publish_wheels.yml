@@ -85,14 +85,12 @@ jobs:
         if: runner.os == 'Windows' && runner.arch == 'X64'
         run: |
           curl -L --fail --retry 3 -o boost_prebuilt.exe https://archives.boost.io/release/1.88.0/binaries/boost_1_88_0-msvc-14.3-64.exe
-          7z x boost_prebuilt.exe -oC:/boost_prebuilt -y > /dev/null
-          if [ -d /c/boost_prebuilt/boost_1_88_0 ]; then
-            ROOT=C:/boost_prebuilt/boost_1_88_0
-          else
-            ROOT=C:/boost_prebuilt
-          fi
-          echo "BOOST_ROOT=${ROOT}" >> $GITHUB_ENV
-          echo "Boost_DIR=${ROOT}/lib64-msvc-14.3/cmake/Boost-1.88.0" >> $GITHUB_ENV
+          # The prebuilt binaries ship as an Inno Setup installer (not a 7z
+          # self-extractor); run it silently and wait for it to finish
+          powershell -Command "Start-Process -FilePath 'boost_prebuilt.exe' -ArgumentList '/VERYSILENT','/NORESTART','/SP-','/SUPPRESSMSGBOXES','/DIR=C:\boost_prebuilt' -Wait"
+          test -d /c/boost_prebuilt/lib64-msvc-14.3 || { echo "unexpected Boost layout:"; ls /c/boost_prebuilt; exit 1; }
+          echo "BOOST_ROOT=C:/boost_prebuilt" >> $GITHUB_ENV
+          echo "Boost_DIR=C:/boost_prebuilt/lib64-msvc-14.3/cmake/Boost-1.88.0" >> $GITHUB_ENV
         shell: bash
 
       - name: Cache Boost (Windows ARM)
