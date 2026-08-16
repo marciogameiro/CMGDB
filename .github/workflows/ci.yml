@@ -24,9 +24,6 @@ jobs:
   test:
     name: Test on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    # windows-11-arm is not allowed to block CI while Python dependency
-    # wheels (matplotlib in particular) remain spotty on that platform
-    continue-on-error: ${{ matrix.os == 'windows-11-arm' }}
     strategy:
       fail-fast: false
       matrix:
