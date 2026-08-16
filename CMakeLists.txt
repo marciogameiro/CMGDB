@@ -17,10 +17,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # flag for the compiler makes it support them.
 if(MSVC)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /permissive-")
-  # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++latest /permissive-")
+  # Python extension modules must use the dynamic CRT (/MD, CMake's MSVC
+  # default): CPython itself is /MD, and mixing C runtimes across the
+  # extension boundary is unsafe. Boost still links statically into the
+  # module -- via its dynamic-runtime static libraries, so
+  # Boost_USE_STATIC_RUNTIME must stay off to select them.
   set(Boost_USE_STATIC_LIBS ON)
-  set(Boost_USE_STATIC_RUNTIME ON)
-  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
 endif()
 
 if(APPLE)
