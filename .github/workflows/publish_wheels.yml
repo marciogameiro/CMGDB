@@ -78,8 +78,25 @@ jobs:
           # built for the wheel's minimum macOS, not the runner's OS
           key: boost-1.88.0-${{ runner.os }}-${{ runner.arch }}-target${{ matrix.macosx_deployment_target }}
 
-      - name: Cache Boost (Windows)
-        if: runner.os == 'Windows'
+      # Windows x64 uses the official prebuilt MSVC binaries (minutes
+      # instead of the ~40-60 minute source build); no prebuilt exists for
+      # ARM64, which builds from source behind a cache
+      - name: Install Boost (Windows x64, prebuilt)
+        if: runner.os == 'Windows' && runner.arch == 'X64'
+        run: |
+          curl -L --fail --retry 3 -o boost_prebuilt.exe https://archives.boost.io/release/1.88.0/binaries/boost_1_88_0-msvc-14.3-64.exe
+          7z x boost_prebuilt.exe -oC:/boost_prebuilt -y > /dev/null
+          if [ -d /c/boost_prebuilt/boost_1_88_0 ]; then
+            ROOT=C:/boost_prebuilt/boost_1_88_0
+          else
+            ROOT=C:/boost_prebuilt
+          fi
+          echo "BOOST_ROOT=${ROOT}" >> $GITHUB_ENV
+          echo "Boost_DIR=${ROOT}/lib64-msvc-14.3/cmake/Boost-1.88.0" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Cache Boost (Windows ARM)
+        if: runner.os == 'Windows' && runner.arch == 'ARM64'
         id: cache-boost-windows
         uses: actions/cache@v6
         with:
@@ -122,8 +139,8 @@ jobs:
             --with-chrono --with-thread --with-serialization --with-date_time --with-atomic
         shell: bash
 
-      - name: Install Boost for Windows
-        if: runner.os == 'Windows' && steps.cache-boost-windows.outputs.cache-hit != 'true'
+      - name: Install Boost for Windows ARM
+        if: runner.os == 'Windows' && runner.arch == 'ARM64' && steps.cache-boost-windows.outputs.cache-hit != 'true'
         run: |
           INSTALL_PREFIX="C:/boost"
           curl -L -o boost_1_88_0.tar.bz2 https://archives.boost.io/release/1.88.0/source/boost_1_88_0.tar.bz2
@@ -138,8 +155,11 @@ jobs:
         run: |
           if [ "${{ runner.os }}" = "macOS" ]; then
             echo "BOOST_ROOT=/Users/runner" >> $GITHUB_OUTPUT
-          elif [ "${{ runner.os }}" = "Windows" ]; then
+          elif [ "${{ runner.os }}" = "Windows" ] && [ "${{ runner.arch }}" = "ARM64" ]; then
             echo "BOOST_ROOT=C:/boost" >> $GITHUB_OUTPUT
+          elif [ "${{ runner.os }}" = "Windows" ]; then
+            # Set by the prebuilt install step
+            echo "BOOST_ROOT=${BOOST_ROOT}" >> $GITHUB_OUTPUT
           else
             echo "BOOST_ROOT=" >> $GITHUB_OUTPUT
           fi
@@ -202,6 +222,7 @@ jobs:
           MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macosx_deployment_target }}
           CIBW_ENVIRONMENT_WINDOWS: >
             BOOST_ROOT=${{ steps.set-boost-root.outputs.BOOST_ROOT }}
+            Boost_DIR=${{ env.Boost_DIR }}
             GMP_ROOT=${{ steps.install-gmp-windows.outputs.GMP_ROOT }}
           CIBW_ENVIRONMENT_MACOS: >
             BOOST_ROOT=${{ steps.set-boost-root.outputs.BOOST_ROOT }}

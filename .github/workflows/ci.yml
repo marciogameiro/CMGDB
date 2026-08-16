@@ -54,16 +54,33 @@ jobs:
         run: |
           brew install boost gmp
 
-      - name: Cache Boost (Windows)
-        if: runner.os == 'Windows'
+      # x64 uses the official prebuilt MSVC binaries (minutes instead of the
+      # ~40-60 minute source build); no prebuilt exists for ARM64, which
+      # builds from source behind a cache
+      - name: Install Boost (Windows x64, prebuilt)
+        if: runner.os == 'Windows' && runner.arch == 'X64'
+        run: |
+          curl -L --fail --retry 3 -o boost_prebuilt.exe https://archives.boost.io/release/1.88.0/binaries/boost_1_88_0-msvc-14.3-64.exe
+          7z x boost_prebuilt.exe -oC:/boost_prebuilt -y > /dev/null
+          if [ -d /c/boost_prebuilt/boost_1_88_0 ]; then
+            ROOT=C:/boost_prebuilt/boost_1_88_0
+          else
+            ROOT=C:/boost_prebuilt
+          fi
+          echo "BOOST_ROOT=${ROOT}" >> $GITHUB_ENV
+          echo "Boost_DIR=${ROOT}/lib64-msvc-14.3/cmake/Boost-1.88.0" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Cache Boost (Windows ARM)
+        if: runner.os == 'Windows' && runner.arch == 'ARM64'
         id: cache-boost
         uses: actions/cache@v6
         with:
           path: C:/boost
           key: boost-1.88.0-${{ runner.os }}-${{ runner.arch }}
 
-      - name: Build Boost (Windows)
-        if: runner.os == 'Windows' && steps.cache-boost.outputs.cache-hit != 'true'
+      - name: Build Boost (Windows ARM)
+        if: runner.os == 'Windows' && runner.arch == 'ARM64' && steps.cache-boost.outputs.cache-hit != 'true'
         run: |
           curl -L -o boost_1_88_0.tar.bz2 https://archives.boost.io/release/1.88.0/source/boost_1_88_0.tar.bz2
           tar --bzip2 -xf boost_1_88_0.tar.bz2
@@ -95,10 +112,11 @@ jobs:
       - name: Set library roots (Windows)
         if: runner.os == 'Windows'
         run: |
-          echo "BOOST_ROOT=C:/boost" >> $GITHUB_ENV
           if [ "${{ runner.arch }}" = "ARM64" ]; then
+            echo "BOOST_ROOT=C:/boost" >> $GITHUB_ENV
             echo "GMP_ROOT=C:/vcpkg/installed/arm64-windows" >> $GITHUB_ENV
           else
+            # BOOST_ROOT/Boost_DIR already set by the prebuilt install step
             echo "GMP_ROOT=C:/vcpkg/installed/x64-windows" >> $GITHUB_ENV
           fi
         shell: bash
