@@ -12,7 +12,13 @@
 #include <boost/serialization/serialization.hpp>
 #include <boost/serialization/nvp.hpp>
 
+// GMP is optional: the default Ring is Zp<5> (see below) and nothing in
+// CMGDB instantiates GMP integer types. Define USE_GMP (and provide the
+// GMP library) to enable the GMP_Integer ring and the GMP specializations
+// in Algebra.h and SparseMatrix.h.
+#ifdef USE_GMP
 #include <gmpxx.h>
+#endif
 
 #include "Field.h"
 
@@ -136,6 +142,7 @@ inline std::ostream & operator << ( std::ostream & outstream, const Long & rhs )
   return outstream;
 }
 
+#ifdef USE_GMP
 class GMP_Integer {
 private:
   mpz_class x;
@@ -229,6 +236,7 @@ inline std::ostream & operator << ( std::ostream & outstream, const GMP_Integer 
   outstream << rhs . x;
   return outstream;
 }
+#endif // USE_GMP
 
 //typedef Long Ring;
 #include "Field.h"

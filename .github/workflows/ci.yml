@@ -47,12 +47,12 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libboost-all-dev libgmp-dev
+          sudo apt-get install -y libboost-all-dev
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install boost gmp
+          brew install boost
 
       # x64 uses the official prebuilt MSVC binaries (minutes instead of the
       # ~40-60 minute source build); no prebuilt exists for ARM64, which
@@ -87,48 +87,11 @@ jobs:
           ./b2 install -d0 -j4 toolset=msvc --with-chrono --with-thread --with-serialization --with-date_time --with-atomic
         shell: bash
 
-      # CMGDB needs only GMP's headers (nothing links it). On x64, install
-      # via the runner's preinstalled MSYS2 -- pacman always fetches current
-      # package versions, so it is immune to the vcpkg/MSYS2 package-rotation
-      # 404s. The ARM64 image ships neither MSYS2 nor vcpkg; it stays on a
-      # bootstrapped vcpkg until that ecosystem settles.
-      - name: Install GMP (Windows x64, MSYS2)
-        if: runner.os == 'Windows' && runner.arch == 'X64'
-        run: |
-          /c/msys64/usr/bin/pacman -Sy --noconfirm
-          /c/msys64/usr/bin/pacman -S --noconfirm --needed mingw-w64-x86_64-gmp
-        shell: bash
-
-      - name: Cache GMP (Windows ARM)
+      - name: Set library roots (Windows ARM)
         if: runner.os == 'Windows' && runner.arch == 'ARM64'
-        id: cache-gmp
-        uses: actions/cache@v6
-        with:
-          path: C:/vcpkg/installed
-          key: vcpkg-gmp-${{ runner.os }}-${{ runner.arch }}
-
-      - name: Install GMP (Windows ARM, vcpkg)
-        if: runner.os == 'Windows' && runner.arch == 'ARM64' && steps.cache-gmp.outputs.cache-hit != 'true'
         run: |
-          # The windows-11-arm runner image does not ship vcpkg; bootstrap
-          # it into the same C:/vcpkg location the x64 image provides
-          if [ ! -f /c/vcpkg/vcpkg.exe ]; then
-            git clone --depth 1 https://github.com/microsoft/vcpkg /c/vcpkg
-            cmd //c "C:\\vcpkg\\bootstrap-vcpkg.bat"
-          fi
-          /c/vcpkg/vcpkg install gmp
-        shell: bash
-
-      - name: Set library roots (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          if [ "${{ runner.arch }}" = "ARM64" ]; then
-            echo "BOOST_ROOT=C:/boost" >> $GITHUB_ENV
-            echo "GMP_ROOT=C:/vcpkg/installed/arm64-windows" >> $GITHUB_ENV
-          else
-            # BOOST_ROOT/Boost_DIR already set by the prebuilt install step
-            echo "GMP_ROOT=C:/msys64/mingw64" >> $GITHUB_ENV
-          fi
+          # x64 BOOST_ROOT/Boost_DIR are set by the prebuilt install step
+          echo "BOOST_ROOT=C:/boost" >> $GITHUB_ENV
         shell: bash
 
       - name: Build and install

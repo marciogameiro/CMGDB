@@ -48,13 +48,6 @@ endif()
 include_directories(${Boost_INCLUDE_DIRS})
 link_directories(${Boost_LIBRARY_DIRS})
 
-if(MSVC)
-  # Set GMP include and link directories
-  message("GMP_ROOT is $ENV{GMP_ROOT}")
-  include_directories($ENV{GMP_ROOT}/include)
-  link_directories($ENV{GMP_ROOT}/lib)
-endif()
-
 if(APPLE)
   # Homebrew directories for Apple silicon
   # Homebrew include and library dirs (for GMP)
