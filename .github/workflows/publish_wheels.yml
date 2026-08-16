@@ -52,8 +52,7 @@ jobs:
 
     steps:
       # The repository is self-contained: pyproject.toml (scikit-build-core)
-      # and CMakeLists.txt at the root are the build configuration, and
-      # sdsl-lite is vendored under src/CMGDB/_cmgdb/third_party/.
+      # and CMakeLists.txt at the root are the build configuration
       - name: Checkout repository
         uses: actions/checkout@v7
 

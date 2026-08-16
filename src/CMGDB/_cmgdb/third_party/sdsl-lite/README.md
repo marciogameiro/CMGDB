@@ -7,7 +7,10 @@ This is the community-maintained, header-only, BSD-3-Clause fork of the
 Succinct Data Structure Library (the original `simongog/sdsl-lite` v2 is a
 GPLv3 compiled library). Only the `include/` tree plus `LICENSE` and
 `AUTHORS` are vendored; CMGDB uses it from `SuccinctTree.h` and
-`RankSelect.h`.
+`RankSelect.h`, which back the optional succinct grid and are compiled
+only when `CMGDB_USE_SUCCINCT` is defined (default builds use PointerGrid
+and never include sdsl). Note: these headers use GCC/Clang extensions
+(`__attribute__`, `cxxabi.h`) and do not compile under MSVC.
 
 Vendored rather than fetched or installed so that source builds
 (`pip install CMGDB`) are self-contained, need no network at build time,

@@ -26,7 +26,7 @@ Here is an old [survey](http://chomp.rutgers.edu/Projects/survey/cmdbSurvey.pdf)
 
 ## Installing from source and dependencies
 
-To install from source you need a C++ compiler and [Boost](https://www.boost.org/) installed. The [Succinct Data Structure Library (SDSL)](https://github.com/xxsds/sdsl-lite) is bundled with CMGDB (header-only, no installation needed). Assuming you have Boost installed in your system, you can install from source with the command:
+To install from source you need a C++ compiler and [Boost](https://www.boost.org/) installed. Assuming you have Boost installed in your system, you can install from source with the command:
 
 	pip install --force-reinstall --no-deps --no-cache-dir git+https://github.com/marciogameiro/CMGDB.git
 

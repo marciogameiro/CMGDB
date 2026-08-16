@@ -64,7 +64,9 @@ include_directories(${CMAKE_SOURCE_DIR}/${USER_PROJECT_PATH}/include/database)
 pybind11_add_module(_cmgdb MODULE ${USER_PROJECT_PATH}/CMGDB.cpp)
 # pybind11_add_module(_cmgdb MODULE src/CMGDB/_cmgdb/CMGDB.cpp)
 
-# Vendored header-only sdsl-lite v3 (see src/CMGDB/_cmgdb/third_party/sdsl-lite/).
+# Vendored header-only sdsl-lite v3 (see src/CMGDB/_cmgdb/third_party/sdsl-lite/),
+# compiled only when CMGDB_USE_SUCCINCT is defined (it backs the optional
+# succinct grid; default builds use PointerGrid and never include sdsl).
 # BEFORE, so that an sdsl v2 installation under a system prefix (e.g.
 # /usr/local or Homebrew) cannot shadow these headers.
 target_include_directories(_cmgdb BEFORE PRIVATE
