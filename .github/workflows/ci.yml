@@ -57,7 +57,7 @@ jobs:
       - name: Cache Boost (Windows)
         if: runner.os == 'Windows'
         id: cache-boost
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: C:/boost
           key: boost-1.88.0-${{ runner.os }}-${{ runner.arch }}
@@ -75,14 +75,21 @@ jobs:
       - name: Cache GMP (Windows)
         if: runner.os == 'Windows'
         id: cache-gmp
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: C:/vcpkg/installed
           key: vcpkg-gmp-${{ runner.os }}-${{ runner.arch }}
 
       - name: Install GMP (Windows)
         if: runner.os == 'Windows' && steps.cache-gmp.outputs.cache-hit != 'true'
-        run: vcpkg install gmp
+        run: |
+          # The windows-11-arm runner image does not ship vcpkg; bootstrap
+          # it into the same C:/vcpkg location the x64 image provides
+          if [ ! -f /c/vcpkg/vcpkg.exe ]; then
+            git clone --depth 1 https://github.com/microsoft/vcpkg /c/vcpkg
+            cmd //c "C:\\vcpkg\\bootstrap-vcpkg.bat"
+          fi
+          /c/vcpkg/vcpkg install gmp
         shell: bash
 
       - name: Set library roots (Windows)
