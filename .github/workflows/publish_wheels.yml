@@ -78,7 +78,7 @@ jobs:
             /Users/runner/lib
           # The deployment target is part of the key: the dylibs must be
           # built for the wheel's minimum macOS, not the runner's OS
-          key: boost-1.88.0-${{ runner.os }}-${{ runner.arch }}-target${{ matrix.macosx_deployment_target }}
+          key: boost-1.88.0-static-${{ runner.os }}-${{ runner.arch }}-target${{ matrix.macosx_deployment_target }}
 
       # Windows x64 uses the official prebuilt MSVC binaries (minutes
       # instead of the ~40-60 minute source build); no prebuilt exists for
@@ -101,7 +101,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: C:/boost
-          key: boost-1.88.0-${{ runner.os }}-${{ runner.arch }}
+          key: boost-1.88.0-static-${{ runner.os }}-${{ runner.arch }}
 
       - name: Install boost for macOS Intel
         if: matrix.buildplat[2] == 'macosx_x86_64' && steps.cache-boost-macos.outputs.cache-hit != 'true'
@@ -147,7 +147,11 @@ jobs:
           tar --bzip2 -xf boost_1_88_0.tar.bz2
           cd boost_1_88_0
           ./bootstrap.sh --prefix=${INSTALL_PREFIX}
-          ./b2 install -d0 -j4 toolset=msvc --with-chrono --with-thread --with-serialization --with-date_time --with-atomic
+          ./b2 install -d0 -j4 toolset=msvc architecture=arm address-model=64 \
+            link=static variant=release \
+            --with-chrono --with-thread --with-serialization --with-date_time --with-atomic
+          echo "Installed Boost libraries:"
+          ls /c/boost/lib
         shell: bash
 
       - name: Save Boost cache (macOS)
@@ -157,14 +161,14 @@ jobs:
           path: |
             /Users/runner/include/boost
             /Users/runner/lib
-          key: boost-1.88.0-${{ runner.os }}-${{ runner.arch }}-target${{ matrix.macosx_deployment_target }}
+          key: boost-1.88.0-static-${{ runner.os }}-${{ runner.arch }}-target${{ matrix.macosx_deployment_target }}
 
       - name: Save Boost cache (Windows ARM)
         if: runner.os == 'Windows' && runner.arch == 'ARM64' && steps.cache-boost-windows.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
           path: C:/boost
-          key: boost-1.88.0-${{ runner.os }}-${{ runner.arch }}
+          key: boost-1.88.0-static-${{ runner.os }}-${{ runner.arch }}
 
       - name: Set BOOST_ROOT
         id: set-boost-root

@@ -78,7 +78,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: C:/boost
-          key: boost-1.88.0-${{ runner.os }}-${{ runner.arch }}
+          key: boost-1.88.0-static-${{ runner.os }}-${{ runner.arch }}
 
       - name: Build Boost (Windows ARM)
         if: runner.os == 'Windows' && runner.arch == 'ARM64' && steps.cache-boost.outputs.cache-hit != 'true'
@@ -87,7 +87,11 @@ jobs:
           tar --bzip2 -xf boost_1_88_0.tar.bz2
           cd boost_1_88_0
           ./bootstrap.sh --prefix=C:/boost
-          ./b2 install -d0 -j4 toolset=msvc --with-chrono --with-thread --with-serialization --with-date_time --with-atomic
+          ./b2 install -d0 -j4 toolset=msvc architecture=arm address-model=64 \
+            link=static variant=release \
+            --with-chrono --with-thread --with-serialization --with-date_time --with-atomic
+          echo "Installed Boost libraries:"
+          ls /c/boost/lib
         shell: bash
 
       - name: Save Boost cache (Windows ARM)
@@ -95,7 +99,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: C:/boost
-          key: boost-1.88.0-${{ runner.os }}-${{ runner.arch }}
+          key: boost-1.88.0-static-${{ runner.os }}-${{ runner.arch }}
 
       - name: Set library roots (Windows ARM)
         if: runner.os == 'Windows' && runner.arch == 'ARM64'
