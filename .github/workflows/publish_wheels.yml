@@ -66,10 +66,13 @@ jobs:
       # Boost is built from source and cached per platform+arch; only the
       # first run on a given configuration pays the build cost. The install
       # prefixes are fixed: /Users/runner on macOS, C:/boost on Windows.
-      - name: Cache Boost (macOS)
+      # restore/save are split so a finished Boost build is saved even if a
+      # later step of the job fails (the combined cache action only saves
+      # when the whole job succeeds)
+      - name: Restore Boost cache (macOS)
         if: runner.os == 'macOS'
         id: cache-boost-macos
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: |
             /Users/runner/include/boost
@@ -93,10 +96,10 @@ jobs:
           echo "Boost_DIR=C:/boost_prebuilt/lib64-msvc-14.3/cmake/Boost-1.88.0" >> $GITHUB_ENV
         shell: bash
 
-      - name: Cache Boost (Windows ARM)
+      - name: Restore Boost cache (Windows ARM)
         if: runner.os == 'Windows' && runner.arch == 'ARM64'
         id: cache-boost-windows
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: C:/boost
           key: boost-1.88.0-${{ runner.os }}-${{ runner.arch }}
@@ -147,6 +150,22 @@ jobs:
           ./bootstrap.sh --prefix=${INSTALL_PREFIX}
           ./b2 install -d0 -j4 toolset=msvc --with-chrono --with-thread --with-serialization --with-date_time --with-atomic
         shell: bash
+
+      - name: Save Boost cache (macOS)
+        if: runner.os == 'macOS' && steps.cache-boost-macos.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            /Users/runner/include/boost
+            /Users/runner/lib
+          key: boost-1.88.0-${{ runner.os }}-${{ runner.arch }}-target${{ matrix.macosx_deployment_target }}
+
+      - name: Save Boost cache (Windows ARM)
+        if: runner.os == 'Windows' && runner.arch == 'ARM64' && steps.cache-boost-windows.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: C:/boost
+          key: boost-1.88.0-${{ runner.os }}-${{ runner.arch }}
 
       - name: Set BOOST_ROOT
         id: set-boost-root

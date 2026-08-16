@@ -7,7 +7,9 @@
 #include "EuclideanParameterSpace.h"
 #include "TreeGrid.h"
 #include "PointerGrid.h"
+#ifdef CMGDB_USE_SUCCINCT
 #include "SuccinctGrid.h"
+#endif
 #include "UniformGrid.h"
 #include "MorseGraph.h"
 #include "Configuration.h"

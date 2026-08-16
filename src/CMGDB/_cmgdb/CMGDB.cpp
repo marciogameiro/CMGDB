@@ -28,8 +28,14 @@
 #include "conleyIndexString.h"
 
 #include <boost/serialization/export.hpp>
+// The succinct (sdsl-backed) grid is optional: the phase grid is
+// PointerGrid and nothing constructs a SuccinctGrid, so default builds do
+// not compile against the vendored sdsl-lite at all. Define
+// CMGDB_USE_SUCCINCT to enable it.
+#ifdef CMGDB_USE_SUCCINCT
 #include "SuccinctGrid.h"
 BOOST_CLASS_EXPORT_IMPLEMENT(SuccinctGrid);
+#endif
 #include "PointerGrid.h"
 BOOST_CLASS_EXPORT_IMPLEMENT(PointerGrid);
 
