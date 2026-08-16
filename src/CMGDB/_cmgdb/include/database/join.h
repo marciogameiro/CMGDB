@@ -4,7 +4,12 @@
 #include <memory>
 #include <exception>
 #include "TreeGrid.h"
+// The Atlas (chart-based) grid is optional: nothing in the default
+// pipeline constructs one, and it depends on the sdsl-backed RankSelect
+// (GCC/Clang only). Define CMGDB_USE_ATLAS to enable it.
+#ifdef CMGDB_USE_ATLAS
 #include "Atlas.h"
+#endif
 
 template < class GridType, class InputIterator>
 void join ( std::shared_ptr<GridType> output, 
@@ -21,14 +26,16 @@ struct joinImpl {
 	    						 InputIterator start, 
 	    						 InputIterator stop ) { 
 		// Dynamic Dispatch
-		if ( std::shared_ptr<TreeGrid> ptr = 
+		if ( std::shared_ptr<TreeGrid> ptr =
 			   std::dynamic_pointer_cast<TreeGrid> ( output ) ) {
 			return joinImpl<TreeGrid,InputIterator>::act ( ptr, start, stop );
 		}
-		if ( std::shared_ptr<Atlas> ptr = 
+#ifdef CMGDB_USE_ATLAS
+		if ( std::shared_ptr<Atlas> ptr =
 			   std::dynamic_pointer_cast<Atlas> ( output ) ) {
 			return joinImpl<Atlas,InputIterator>::act ( ptr, start, stop );
 		}
+#endif
 		throw std::logic_error ( "Error: joinImpl specialization not "
 			                       " written for this Grid class.\n" );
 	} 
@@ -54,8 +61,9 @@ struct joinImpl < TreeGrid, InputIterator > {
 	} 
 };
 
+#ifdef CMGDB_USE_ATLAS
 template < class InputIterator >
-struct joinImpl < Atlas, InputIterator > { 
+struct joinImpl < Atlas, InputIterator > {
 	static void act ( std::shared_ptr<Atlas> output, 
 	    						  InputIterator start, 
 	    						  InputIterator stop ) { 
@@ -98,6 +106,7 @@ struct joinImpl < Atlas, InputIterator > {
 			//std::cout << "Atlas join returned from join recursion\n";
 		}
 		output -> finalize ();
-	} 
+	}
 };
+#endif // CMGDB_USE_ATLAS
 #endif
