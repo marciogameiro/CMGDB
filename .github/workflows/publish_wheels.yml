@@ -174,16 +174,28 @@ jobs:
         if: runner.os == 'Windows'
         uses: microsoft/setup-msbuild@v3
 
-      - name: Cache GMP for Windows
-        if: runner.os == 'Windows'
+      # CMGDB needs only GMP's headers (nothing links it). On x64, install
+      # via the runner's preinstalled MSYS2 -- pacman always fetches current
+      # package versions, so it is immune to the vcpkg/MSYS2 package-rotation
+      # 404s. The ARM64 image ships neither MSYS2 nor vcpkg; it stays on a
+      # bootstrapped vcpkg until that ecosystem settles.
+      - name: Install GMP for Windows x64 (MSYS2)
+        if: runner.os == 'Windows' && runner.arch == 'X64'
+        run: |
+          /c/msys64/usr/bin/pacman -Sy --noconfirm
+          /c/msys64/usr/bin/pacman -S --noconfirm --needed mingw-w64-x86_64-gmp
+          echo "GMP_ROOT=C:/msys64/mingw64" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Cache GMP for Windows ARM
+        if: runner.os == 'Windows' && runner.arch == 'ARM64'
         uses: actions/cache@v6
         with:
           path: C:/vcpkg/installed
           key: vcpkg-gmp-${{ runner.os }}-${{ runner.arch }}
 
-      - name: Install GMP for Windows
-        if: runner.os == 'Windows'
-        id: install-gmp-windows
+      - name: Install GMP for Windows ARM (vcpkg)
+        if: runner.os == 'Windows' && runner.arch == 'ARM64'
         run: |
           # The windows-11-arm runner image does not ship vcpkg; bootstrap
           # it into the same C:/vcpkg location the x64 image provides
@@ -191,22 +203,16 @@ jobs:
             git clone --depth 1 https://github.com/microsoft/vcpkg /c/vcpkg
             cmd //c "C:\\vcpkg\\bootstrap-vcpkg.bat"
           fi
-          # vcpkg's default triplet follows the runner architecture
-          if [ "${{ matrix.buildplat[1] }}" = "ARM64" ]; then
-            TRIPLET=arm64-windows
-          else
-            TRIPLET=x64-windows
-          fi
-          if [ ! -d "C:/vcpkg/installed/${TRIPLET}" ]; then
+          if [ ! -d "C:/vcpkg/installed/arm64-windows" ]; then
             /c/vcpkg/vcpkg install gmp
           fi
-          echo "GMP_ROOT=C:/vcpkg/installed/${TRIPLET}" >> $GITHUB_OUTPUT
+          echo "GMP_ROOT=C:/vcpkg/installed/arm64-windows" >> $GITHUB_ENV
         shell: bash
 
       - name: Show library root directories
         run: |
           echo "BOOST_ROOT is " ${{ steps.set-boost-root.outputs.BOOST_ROOT }}
-          echo "GMP_ROOT is " ${{ steps.install-gmp-windows.outputs.GMP_ROOT }}
+          echo "GMP_ROOT is " ${{ env.GMP_ROOT }}
         shell: bash
 
       - name: Build wheels
@@ -221,7 +227,7 @@ jobs:
           CIBW_ENVIRONMENT_WINDOWS: >
             BOOST_ROOT=${{ steps.set-boost-root.outputs.BOOST_ROOT }}
             Boost_DIR=${{ env.Boost_DIR }}
-            GMP_ROOT=${{ steps.install-gmp-windows.outputs.GMP_ROOT }}
+            GMP_ROOT=${{ env.GMP_ROOT }}
           CIBW_ENVIRONMENT_MACOS: >
             BOOST_ROOT=${{ steps.set-boost-root.outputs.BOOST_ROOT }}
             MACOSX_DEPLOYMENT_TARGET=${{ matrix.macosx_deployment_target }}
