@@ -10,7 +10,8 @@ a performance change that alters the computed dynamics fails loudly.
 ```bash
 python benchmarks/benchmark.py              # quick suite (~1 min, 3 reps each)
 python benchmarks/benchmark.py --heavy      # heavy suite (~3 min, 1 rep each)
-python benchmarks/benchmark.py --all        # both
+python benchmarks/benchmark.py --all        # quick + heavy
+python benchmarks/benchmark.py --chafee     # Chafee-Infante 3D suite (opt-in, large)
 python benchmarks/benchmark.py --list       # list scenarios
 python benchmarks/benchmark.py --scenario leslie2d_python --repeat 5
 ```
@@ -36,6 +37,30 @@ The suite covers the main CMGDB usage modes on Leslie population models:
 
 All scenarios are deterministic (corner-mode box maps, seeded data
 generation), so references are exact.
+
+## The Chafee-Infante 3D suite
+
+The `chafee` suite (opt-in via `--chafee`; excluded from `--all`) runs the
+five computations of a real research workload: the learned 3D
+latent-dynamics map of the Chafee-Infante PDE, a tanh MLP
+(3 &rarr; 32 &rarr; 32 &rarr; 3) whose trained weights and phase-space
+bounds ship in `chafee3d_latent_map.npz` (12 KB). The box map takes
+corner images with width padding, evaluated live in vectorized float64
+NumPy.
+
+| Scenario | Computation |
+|----------|-------------|
+| `chafee3d_uniform_16` | Conley-Morse graph, uniform subdiv 16 (65k cells) |
+| `chafee3d_uniform_18` | Conley-Morse graph, uniform subdiv 18 (262k cells) |
+| `chafee3d_adaptive_18_20_22` | Conley-Morse graph, init 18, subdiv 20/22 |
+| `chafee3d_adaptive_21_24_33` | Conley-Morse graph, init 21, subdiv 24/33 (the full-depth adaptive computation) |
+| `chafee3d_uniform_24` | Morse graph only, uniform subdiv 24 (16.7M cells, ~1e9 edges, **needs ~10 GB RAM**) |
+
+This is the workload class where the fiber-preboundary and edge-array
+reservation behavior matter most (large box images &rarr; large Conley
+fibers; a multi-gigabyte CSR edge array at subdiv 24), which the Leslie
+and Henon scenarios do not reach at benchmark depths. Total runtime is
+roughly 10-15 minutes.
 
 ## Reading the results
 

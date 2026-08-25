@@ -178,12 +178,19 @@ def extract_reference(morse_graph, map_graph=None):
 # runs in a couple of minutes total; heavy scenarios are meaningfully larger.
 # ---------------------------------------------------------------------------
 
-def _run_python_leslie(dim, subdiv_min, subdiv_max, conley=False, batch=False):
+def _run_python_leslie(dim, subdiv_min, subdiv_max, conley=False, batch=False,
+                       subdiv_init=None, subdiv_limit=None, padding=False):
     import CMGDB
     f = leslie_point_map(dim)
-    F = CountingMap(lambda rect: CMGDB.BoxMap(f, rect))
+    F = CountingMap(lambda rect: CMGDB.BoxMap(f, rect, padding=padding))
     lower_bounds, upper_bounds = LESLIE_DOMAINS[dim]
-    model = CMGDB.Model(subdiv_min, subdiv_max, lower_bounds, upper_bounds, F)
+    if subdiv_init is None and subdiv_limit is None:
+        model = CMGDB.Model(subdiv_min, subdiv_max, lower_bounds, upper_bounds, F)
+    else:
+        model = CMGDB.Model(subdiv_min, subdiv_max,
+                            subdiv_init if subdiv_init is not None else 0,
+                            subdiv_limit if subdiv_limit is not None else 10000,
+                            lower_bounds, upper_bounds, F)
     F_batch = None
     if batch:
         f_vec = leslie_point_map_vectorized(dim)
@@ -332,6 +339,61 @@ def _run_interval_leslie(subdiv_min, subdiv_max):
     return reference, {"map_calls": 0, "map_seconds": 0.0}
 
 
+def _load_chafee3d_map():
+    """Learned 3D latent-dynamics map of the Chafee-Infante PDE: a tanh MLP
+    (3 -> 32 -> 32 -> 3) exported from a trained autoencoder's latent map and
+    evaluated in float64 NumPy (the 12 KB weights and phase-space bounds ship
+    in benchmarks/chafee3d_latent_map.npz). The box map takes corner images
+    with width padding, an outer enclosure for the nonrigorous learned
+    map."""
+    import numpy as np
+    data = np.load(BENCH_DIR / "chafee3d_latent_map.npz")
+    W0, b0 = data["W0"], data["b0"]
+    W2, b2 = data["W2"], data["b2"]
+    W4, b4 = data["W4"], data["b4"]
+
+    def f_vec(Z):
+        H = np.tanh(Z @ W0.T + b0)
+        H = np.tanh(H @ W2.T + b2)
+        return H @ W4.T + b4
+
+    return f_vec, list(data["lower"]), list(data["upper"])
+
+
+def _run_chafee3d(subdiv_min, subdiv_max, subdiv_init, conley=False):
+    import numpy as np
+    import CMGDB
+    f_vec, lower_bounds, upper_bounds = _load_chafee3d_map()
+    dim = len(lower_bounds)
+    corner_bits = np.array([[(k >> d) & 1 for d in range(dim)]
+                            for k in range(2 ** dim)], dtype=float)
+
+    def box_enclosure(rects):
+        # Corner images with width padding: the outer-enclosure box map.
+        # Implemented inline (not via CMGDB.BoxMapBatch) so the scenario runs
+        # unchanged on any CMGDB build when cross-validating references.
+        rect_arr = np.asarray(rects, dtype=float)
+        lower, upper = rect_arr[:, :dim], rect_arr[:, dim:]
+        width = upper - lower
+        points = lower[:, None, :] + corner_bits[None, :, :] * width[:, None, :]
+        images = f_vec(points.reshape(-1, dim)).reshape(points.shape)
+        image_lower = images.min(axis=1) - width
+        image_upper = images.max(axis=1) + width
+        return np.concatenate([image_lower, image_upper], axis=1).tolist()
+
+    F = CountingMap(lambda rect: box_enclosure([rect])[0])
+    model = CMGDB.Model(subdiv_min, subdiv_max, subdiv_init, 10000,
+                        lower_bounds, upper_bounds, F)
+    F_batch = CountingBatchMap(box_enclosure)
+    model.set_batch_map(F_batch)
+    compute = CMGDB.ComputeConleyMorseGraph if conley else CMGDB.ComputeMorseGraph
+    morse_graph, map_graph = compute(model)
+    reference = extract_reference(morse_graph, map_graph)
+    map_calls = F.calls + F_batch.calls
+    map_seconds = F.seconds + F_batch.seconds
+    return reference, {"map_calls": map_calls, "map_seconds": map_seconds}
+
+
 SCENARIOS = {
     # ---- quick suite ----
     "leslie2d_python": {
@@ -460,6 +522,21 @@ SCENARIOS = {
         "run": lambda: _run_python_leslie(4, 16, 20, conley=True),
         "describe": "4D Leslie, Conley-Morse graph (4D homology), subdiv 16/20",
     },
+    "leslie3d_conley_deep": {
+        "suite": "heavy",
+        "run": lambda: _run_python_leslie(3, 20, 23, conley=True),
+        "describe": "3D Leslie, Conley-Morse graph, subdiv 20/23 (Morse sets at the 10k subdiv_limit: large Conley fibers, preboundary stress)",
+    },
+    "leslie3d_conley_pad": {
+        "suite": "heavy",
+        "run": lambda: _run_python_leslie(3, 18, 21, conley=True, padding=True),
+        "describe": "3D Leslie with padded box images, Conley-Morse graph, subdiv 18/21",
+    },
+    "leslie3d_uniform_deep": {
+        "suite": "heavy",
+        "run": lambda: _run_python_leslie(3, 23, 23, batch=True, subdiv_init=23),
+        "describe": "3D Leslie, uniform decomposition at subdiv 23 (8.4M boxes, >2^24 edges: CSR reserve path), batched map",
+    },
     "leslie2d_expensive_live": {
         "suite": "heavy",
         "run": lambda: _run_expensive_leslie2d(15, 16),
@@ -470,9 +547,35 @@ SCENARIOS = {
         "run": lambda: _run_expensive_leslie2d(15, 16, precomputed=True),
         "describe": "2D Leslie + MLP perturbation (expensive map), PrecomputedBoxMap, subdiv 15/16",
     },
+    # ---- chafee suite (opt-in via --chafee; large computations) ----
+    "chafee3d_uniform_16": {
+        "suite": "chafee",
+        "run": lambda: _run_chafee3d(16, 16, 16, conley=True),
+        "describe": "Chafee-Infante 3D latent map, Conley-Morse graph, uniform subdiv 16 (65k cells)",
+    },
+    "chafee3d_uniform_18": {
+        "suite": "chafee",
+        "run": lambda: _run_chafee3d(18, 18, 18, conley=True),
+        "describe": "Chafee-Infante 3D latent map, Conley-Morse graph, uniform subdiv 18 (262k cells)",
+    },
+    "chafee3d_adaptive_18_20_22": {
+        "suite": "chafee",
+        "run": lambda: _run_chafee3d(20, 22, 18, conley=True),
+        "describe": "Chafee-Infante 3D latent map, Conley-Morse graph, adaptive init 18, subdiv 20/22",
+    },
+    "chafee3d_adaptive_21_24_33": {
+        "suite": "chafee",
+        "run": lambda: _run_chafee3d(24, 33, 21, conley=True),
+        "describe": "Chafee-Infante 3D latent map, Conley-Morse graph, adaptive init 21, subdiv 24/33 (the full-depth adaptive computation)",
+    },
+    "chafee3d_uniform_24": {
+        "suite": "chafee",
+        "run": lambda: _run_chafee3d(24, 24, 24, conley=False),
+        "describe": "Chafee-Infante 3D latent map, Morse graph only, uniform subdiv 24 (16.7M cells, ~1e9 edges; needs ~10 GB RAM)",
+    },
 }
 
-DEFAULT_REPEAT = {"quick": 3, "heavy": 1}
+DEFAULT_REPEAT = {"quick": 3, "heavy": 1, "chafee": 1}
 
 
 # ---------------------------------------------------------------------------
@@ -659,6 +762,9 @@ def compare_files(path_a, path_b):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--heavy", action="store_true", help="run heavy suite")
+    parser.add_argument("--chafee", action="store_true",
+                        help="run the Chafee-Infante 3D suite (large runs; "
+                             "the uniform-24 scenario needs ~10 GB RAM)")
     parser.add_argument("--all", action="store_true", help="run quick + heavy suites")
     parser.add_argument("--scenario", action="append", help="run specific scenario(s)")
     parser.add_argument("--repeat", type=int, help="repetitions per scenario")
@@ -697,7 +803,10 @@ def main():
             sys.exit(f"unknown scenario(s): {', '.join(unknown)}")
         selected = args.scenario
     elif args.all:
-        selected = list(SCENARIOS)
+        selected = [s for s, sc in SCENARIOS.items()
+                    if sc["suite"] in ("quick", "heavy")]
+    elif args.chafee:
+        selected = [s for s, sc in SCENARIOS.items() if sc["suite"] == "chafee"]
     elif args.heavy:
         selected = [s for s, sc in SCENARIOS.items() if sc["suite"] == "heavy"]
     else:
