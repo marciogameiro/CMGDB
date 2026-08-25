@@ -9,6 +9,7 @@
 #define CHOMP_FIBERCOMPLEX_H
 
 #include <cstdlib>
+#include <stdexcept>
 #include <vector>
 #include "boost/unordered_set.hpp"
 #include "boost/unordered_map.hpp"
@@ -329,8 +330,6 @@ inline void FiberComplex::project ( Chain * output,
   
 inline Chain FiberComplex::preboundary
 ( const Chain & input ) /* const */ {
-  return SmithPreboundary ( input, *this );
-
   //std::cout << "FiberComplex preboundary, dim = " << input . dimension () <<"\n";
   MorseComplex reduction ( *this );
   Chain canon;
@@ -343,7 +342,13 @@ inline Chain FiberComplex::preboundary
   //std::cout << "smithpreboundary.dim = " << morse_preboundary . dimension () << "\n";
   Chain lifted = reduction . lift ( morse_preboundary );
   //std::cout << "lifted.dim = " << lifted . dimension () << "\n";
-  return ( lifted - gamma );
+  Chain result = lifted - gamma;
+  Chain discrepancy = simplify ( input - boundary ( result ) );
+  if ( not discrepancy () . empty () ) {
+    throw std::runtime_error (
+      "Morse-reduced fiber preboundary failed boundary validation" );
+  }
+  return result;
 }
 
 inline void FiberComplex::boundary 
