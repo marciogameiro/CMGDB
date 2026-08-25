@@ -24,19 +24,36 @@
 ///    construction, in chunks of chunk_size rectangles, and stored in
 ///    compressed sparse row (CSR) form; subsequent adjacency queries never
 ///    evaluate the map again. max_cached_edges bounds the cache: if the edge
-///    count exceeds it the cache is abandoned and the MapGraph falls back to
-///    on-demand evaluation (0 means unlimited).
+///    count exceeds it (or is confidently projected to) the cache is
+///    abandoned and the MapGraph falls back to on-demand evaluation
+///    (0 means unlimited).
+///    reserve_edges controls the up-front reservation of the flat edge
+///    array. 0 (the default) reserves twice the final edge count projected
+///    from the chunks seen so far, which avoids the repeated-doubling
+///    reallocation of multi-gigabyte edge arrays (a transient ~3x memory
+///    peak on deep uniform grids); a positive value reserves exactly that
+///    many edges instead. Reservation only engages once the projected edge
+///    count reaches reserve_min_edges, so small graphs -- including the
+///    per-Morse-set subgraphs built during adaptive runs -- never
+///    over-allocate.
 struct MapGraphOptions {
   bool cache;
   uint64_t chunk_size;
   uint64_t max_cached_edges;
+  uint64_t reserve_edges;
+  uint64_t reserve_min_edges;
   MapGraphOptions ( void )
-    : cache ( false ), chunk_size ( 65536 ), max_cached_edges ( 0 ) {}
+    : cache ( false ), chunk_size ( 65536 ), max_cached_edges ( 0 ),
+      reserve_edges ( 0 ), reserve_min_edges ( uint64_t ( 1 ) << 24 ) {}
   explicit MapGraphOptions ( bool cache_,
                              uint64_t chunk_size_ = 65536,
-                             uint64_t max_cached_edges_ = 0 )
+                             uint64_t max_cached_edges_ = 0,
+                             uint64_t reserve_edges_ = 0,
+                             uint64_t reserve_min_edges_ = uint64_t ( 1 ) << 24 )
     : cache ( cache_ ), chunk_size ( chunk_size_ ),
-      max_cached_edges ( max_cached_edges_ ) {}
+      max_cached_edges ( max_cached_edges_ ),
+      reserve_edges ( reserve_edges_ ),
+      reserve_min_edges ( reserve_min_edges_ ) {}
 };
 
 /// class MapGraph
@@ -98,10 +115,17 @@ public:
     return cached_ ? (uint64_t) csr_edges_ . size () : 0;
   }
 
+  /// build_cache
+  ///   Build the CSR transition-graph cache now (a no-op if it is already
+  ///   built). Lets a MapGraph constructed lazily -- e.g. the map_graph
+  ///   returned by ComputeMorseGraph with cache_map_graph=False -- be
+  ///   upgraded to a cached one after the fact, at the cost of one full
+  ///   (batched, if available) pass of map evaluations over the grid.
+  void build_cache ( void );
+
 private:
   // Private methods
   std::vector<size_type> compute_adjacencies ( const size_type & v ) const;
-  void build_cache ( void );
   // Private data
   std::shared_ptr<const Grid> grid_;
   std::shared_ptr<const Map> f_;
@@ -156,6 +180,7 @@ MapGraph::initialize ( void ) {
 ///    produces are identical, element for element, to the on-demand path.
 inline void
 MapGraph::build_cache ( void ) {
+  if ( cached_ ) return;
   const uint64_t n = num_vertices ();
   csr_offsets_ . clear ();
   csr_edges_ . clear ();
@@ -222,6 +247,45 @@ MapGraph::build_cache ( void ) {
       cached_ = false;
       return;
     }
+    if ( stop < n ) {
+      // Project the final edge count from the edge density seen so far.
+      // The projection sizes the up-front reservation of the flat edge
+      // array -- a deep uniform grid's multi-gigabyte edge array is then
+      // allocated (nearly) once instead of repeatedly doubled with a
+      // transient ~3x memory peak -- and lets a user-set cap fail fast
+      // instead of building a doomed cache all the way up to the cap.
+      // Chunks follow the tree order (a spatial sweep), so early density
+      // can be biased; the projection is therefore refreshed every chunk,
+      // the auto reservation doubles it for headroom, and the early cap
+      // abandon requires a 2x margin of confidence (the exact check above
+      // remains authoritative).
+      const double density = (double) csr_edges_ . size () / (double) stop;
+      const uint64_t projected = (uint64_t) ( density * (double) n ) + 1;
+      if ( options_ . max_cached_edges > 0 &&
+           projected > 2 * options_ . max_cached_edges ) {
+        csr_offsets_ . clear ();
+        csr_edges_ . clear ();
+        csr_offsets_ . shrink_to_fit ();
+        csr_edges_ . shrink_to_fit ();
+        cached_ = false;
+        return;
+      }
+      if ( projected >= options_ . reserve_min_edges ) {
+        uint64_t target = options_ . reserve_edges > 0 ?
+          options_ . reserve_edges : 2 * projected;
+        if ( options_ . max_cached_edges > 0 ) {
+          target = std::min ( target, options_ . max_cached_edges );
+        }
+        if ( target > (uint64_t) csr_edges_ . capacity () ) {
+          try {
+            csr_edges_ . reserve ( target );
+          } catch ( std::bad_alloc const& ) {
+            // The reservation is an optimization only; fall back to
+            // ordinary vector growth if the allocator refuses it.
+          }
+        }
+      }
+    }
   }
   cached_ = true;
 }
@@ -275,6 +339,10 @@ MapGraphBinding(py::module &m) {
     .def("num_vertices", &MapGraph::num_vertices)
     .def("has_cache", &MapGraph::has_cache)
     .def("num_cached_edges", &MapGraph::num_cached_edges)
+    .def("build_cache", &MapGraph::build_cache,
+         "Build the CSR transition-graph cache now (no-op if already built). "
+         "Upgrades a lazily returned map_graph to a cached one at the cost "
+         "of one full pass of map evaluations over the grid.")
     .def("adjacencies", &MapGraph::adjacencies);
 }
 
