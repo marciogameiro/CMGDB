@@ -130,10 +130,14 @@ ConleyIndex ( ConleyIndex_t * output,
   //std::cout << "Elapsed time = " << (float) ( stop - start ) / (float) CLOCKS_PER_SEC << "\n";
   //start = clock ();
   
+#ifdef CMG_VERBOSE
   std::cout << "ConleyIndex: calling RelativeMapHomology.\n";
+#endif
   int error_code = RelativeMapHomology ( &(output -> data ()), grid, X, A, grid, X, A, F, depth );
   if ( error_code == 1 ) {
+#ifdef CMG_VERBOSE
     std::cout << "Problem computing conley index. Returning undefined result.\n";
+#endif
     output -> undefined () = true;
     return;
   }

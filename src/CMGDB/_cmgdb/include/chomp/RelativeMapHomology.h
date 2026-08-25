@@ -435,8 +435,10 @@ RelativeMapHomology (RelativeMapHomology_t * output,
     //print_matrix (G);
     //print_matrix (Z);
     if ( MapHom . number_of_rows () != 0 ) {
+#ifdef CMG_VERBOSE
       std::cout << "Dimension " << d << ":\n";
       print_matrix (MapHom);
+#endif
     }
     output -> push_back ( MapHom );
   }

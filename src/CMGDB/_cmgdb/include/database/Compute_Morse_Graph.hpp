@@ -190,10 +190,12 @@ ConstructMorseDecomposition (MorseDecomposition * root,
   pq . push ( root );
   while ( not pq . empty () ) {
     ++ nodes_processed;
-    if ( nodes_processed % 1000 == 0 ) { 
-      std::cout << nodes_processed 
+#ifdef CMG_VERBOSE
+    if ( nodes_processed % 1000 == 0 ) {
+      std::cout << nodes_processed
         << " nodes have been encountered on Morse Decomposition Hierarchy.\n";
     }
+#endif
     MorseDecomposition * work_node = pq . top ();
     pq . pop ();
     //std::cout << "Depth " << work_node -> depth () << ", node " << work_node 
@@ -372,8 +374,10 @@ Compute_Morse_Graph (MorseGraph * MG,
                      const unsigned int Limit,
                      MapGraphOptions options) {
   // Produce Morse Set Decomposition Hierarchy
+#ifdef CMG_VERBOSE
   std::cout << "Compute_Morse_Graph. Initializing root MorseDecomposition\n";
   std::cout << "Compute_Morse_Graph. A phase_space -> size () == " << phase_space -> size () << "\n";
+#endif
 
   std::shared_ptr<Grid> root_space ( (Grid *) (phase_space -> clone ()) );
   
@@ -393,12 +397,14 @@ Compute_Morse_Graph (MorseGraph * MG,
   // Stitch together Morse Graph from Decomposition Hierarchy
   ConstructMorseGraph ( phase_space, MG, root, Min );
 
+#ifdef CMG_VERBOSE
   std::cout << "Compute_Morse_Graph. B phase_space -> size () == " << phase_space -> size () << "\n";
+#endif
 
   // Free memory used in decomposition hierarchy
   delete root;
 #ifdef MEMORYBOOKKEEPING
-
+#ifdef CMG_VERBOSE
   std::cout << "Total Grid Memory (can be external) = " << max_grid_external_memory << "\n";
   std::cout << "Max Memory For Single Grid (must be internal)= " << max_grid_internal_memory << "\n";
   std::cout << "Max SCC Random Access memory use (must be internal)= " << max_scc_memory_internal << "\n";
@@ -407,6 +413,7 @@ Compute_Morse_Graph (MorseGraph * MG,
   std::cout << "Internal Memory Requirement = " << max_grid_internal_memory + max_scc_memory_internal << "\n";
   std::cout << "External Memory Requirement = " << max_grid_external_memory + max_scc_memory_external << "\n";
   std::cout << "Max graph memory size (never stored, however) = " << max_graph_memory << "\n";
+#endif
 #endif
   //std::cout << "Returning from COMPUTE MORSE GRAPH\n";
 }
