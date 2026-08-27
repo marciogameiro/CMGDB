@@ -345,8 +345,18 @@ inline Chain FiberComplex::preboundary
   Chain result = lifted - gamma;
   Chain discrepancy = simplify ( input - boundary ( result ) );
   if ( not discrepancy () . empty () ) {
-    throw std::runtime_error (
-      "Morse-reduced fiber preboundary failed boundary validation" );
+    // The Morse-reduced route can fail on rare fibers. Fall back to the
+    // direct Smith-normal-form solve on the full fiber complex: slower
+    // (it factors the full boundary matrix) but it solves the defining
+    // equation boundary(result) == input directly. Only if that too fails
+    // is the input genuinely not a boundary, which is a real error.
+    result = SmithPreboundary ( input, *this );
+    discrepancy = simplify ( input - boundary ( result ) );
+    if ( not discrepancy () . empty () ) {
+      throw std::runtime_error (
+        "FiberComplex::preboundary failed boundary validation on both the "
+        "Morse-reduced and the full-complex Smith routes" );
+    }
   }
   return result;
 }

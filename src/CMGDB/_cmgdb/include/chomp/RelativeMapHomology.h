@@ -13,6 +13,7 @@
 #include <ctime>
 #include "boost/unordered_map.hpp"
 #include "boost/unordered_set.hpp"
+#include <stdexcept>
 #include "chomp/Matrix.h"
 #include "chomp/Generators.h"
 #include "chomp/Closure.h"
@@ -330,8 +331,18 @@ RelativeMapHomology (RelativeMapHomology_t * output,
           explored_graph_complex += fiber . size (); // run statistics
           // Determine chain in fiber
           Chain projected = fiber . project ( fiberchain . second );
-          // Work out the preboundary
-          Chain preboundary = fiber . preboundary ( projected );
+          // Work out the preboundary. A fiber chain with no preboundary
+          // means the acyclicity assumption fails there and the homology of
+          // this map is unresolvable at this resolution: report the standard
+          // error code so the Conley index is marked undefined, rather than
+          // returning a silently unvalidated solve or aborting the whole
+          // computation.
+          Chain preboundary;
+          try {
+            preboundary = fiber . preboundary ( projected );
+          } catch ( std::runtime_error const& ) {
+            return 1;
+          }
           // Include the preboundary back into the codomain
           Chain included_preboundary = fiber . include ( preboundary );
 
@@ -747,8 +758,18 @@ int RelativeSelfMapHomology (RelativeMapHomology_t * output,
 
           // Determine chain in fiber
           Chain projected = fiber . project ( fiberchain . second );
-          // Work out the preboundary
-          Chain preboundary = fiber . preboundary ( projected );
+          // Work out the preboundary. A fiber chain with no preboundary
+          // means the acyclicity assumption fails there and the homology of
+          // this map is unresolvable at this resolution: report the standard
+          // error code so the Conley index is marked undefined, rather than
+          // returning a silently unvalidated solve or aborting the whole
+          // computation.
+          Chain preboundary;
+          try {
+            preboundary = fiber . preboundary ( projected );
+          } catch ( std::runtime_error const& ) {
+            return 1;
+          }
           // Include the preboundary back into the codomain
           Chain included_preboundary = fiber . include ( preboundary );
 
