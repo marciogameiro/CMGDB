@@ -367,9 +367,9 @@ def PlotMorseSets(morse_sets, morse_nodes=None, proj_dims=None, cmap=None, clist
 
 def PlotMorseSets1D(morse_sets, morse_nodes=None, cmap=None, clist=None, scale_factor=None,
                     fig_w=8, fig_h=None, xlim=None, axis_labels=True, xlabel='$x$',
-                    fontsize=15, height=0.18, edge_clr=None, linewidth=0.5, alpha=None,
-                    label_sets=True, merge_tol=1e-9, fig_fname=None, dpi=300,
-                    rasterize=False, show=None):
+                    axis_arrow=True, fontsize=15, height=0.18, edge_clr=None,
+                    linewidth=0.5, alpha=None, label_sets=True, merge_tol=1e-9,
+                    fig_fname=None, dpi=300, rasterize=False, show=None):
     """Plot one-dimensional Morse sets as boxes sitting on the axis.
 
        Every set is drawn on the same line, which is what a one-dimensional
@@ -387,6 +387,11 @@ def PlotMorseSets1D(morse_sets, morse_nodes=None, cmap=None, clist=None, scale_f
        projecting caps would overshoot each interval by half its linewidth in
        display units, which makes short intervals look longer than they are and
        makes the error depend on the figure size.
+
+       axis_arrow draws the axis as an axis: an arrow head at the right end of
+       the line, with the label at the tip rather than centred beneath. Tick
+       marks are kept either way. Set it False for a plain spine with a
+       centred label.
 
        A Morse set is often several disjoint pieces. Touching boxes are merged
        into maximal intervals -- within merge_tol, since CMGDB's grid gives
@@ -451,7 +456,17 @@ def PlotMorseSets1D(morse_sets, morse_nodes=None, cmap=None, clist=None, scale_f
         ax.spines[spine].set_visible(False)
     ax.spines['bottom'].set_position(('data', 0.0))
     ax.spines['bottom'].set_zorder(3)
-    if axis_labels:
+    if axis_arrow:
+        # Arrow head at the right end of the spine. The marker's transform
+        # takes x in axes fractions and y in data units, so it sits on the
+        # axis line (y = 0) at the axes edge whatever the data limits are.
+        ax.plot(1, 0, '>k', markersize=7, transform=ax.get_yaxis_transform(),
+                clip_on=False, zorder=4)
+        if axis_labels:
+            ax.annotate(xlabel, xy=(1, 0), xycoords=ax.get_yaxis_transform(),
+                        xytext=(12, 0), textcoords='offset points', ha='left',
+                        va='center', fontsize=fontsize, annotation_clip=False)
+    elif axis_labels:
         ax.set_xlabel(xlabel, fontsize=fontsize)
     # The boxes straddle the axis, so their lower half covers the space the
     # tick numbers would occupy. Push the numbers below the boxes, converting
@@ -554,7 +569,8 @@ def PlotMorseSets3D(morse_sets, morse_nodes=None, cmap=None, clist=None, scale_f
                     xlabel='$x$', ylabel='$y$', zlabel='$z$', fontsize=15, elev=22, azim=-55,
                     alpha=1.0, edge_clr=None, linewidth=0.0, lighting=True,
                     light_azdeg=300.0, light_altdeg=55.0, shade_strength=0.32,
-                    zlabel_pos=None, fig_fname=None, dpi=300, rasterize=False, show=None):
+                    grid=False, max_ticks=4, zlabel_pos=None, fig_fname=None,
+                    dpi=300, rasterize=False, show=None):
     """Plot three-dimensional Morse sets as cubical surfaces.
 
        Only faces on the boundary of a Morse set are drawn, so the cost follows
@@ -564,6 +580,14 @@ def PlotMorseSets3D(morse_sets, morse_nodes=None, cmap=None, clist=None, scale_f
        lighting shades the faces by their orientation, which is on by default:
        without it the three visible sides of every cube take the same colour
        and the geometry reads as a flat silhouette. Set it False for flat fill.
+
+       grid keeps Matplotlib's grey background panes and their grid lines. Off
+       by default: the sets then sit on a plain white ground with only the
+       axis lines and ticks, so the surfaces carry the depth cues.
+
+       max_ticks caps the major ticks per axis. A 3-D projection crowds tick
+       numbers along three foreshortened edges, so far fewer fit legibly than
+       on a plane; None keeps Matplotlib's default density.
 
        zlabel_pos places the z label in axes fractions. Matplotlib clips a 3-D
        z label when the figure is saved with a tight bounding box, so the label
@@ -608,6 +632,15 @@ def PlotMorseSets3D(morse_sets, morse_nodes=None, cmap=None, clist=None, scale_f
     ax.set_ylim(list(ylim) if ylim != None else [lower[1] - margin[1], upper[1] + margin[1]])
     ax.set_zlim(list(zlim) if zlim != None else [lower[2] - margin[2], upper[2] + margin[2]])
     ax.view_init(elev=elev, azim=azim)
+    if not grid:
+        # The grid lines live on the background panes, so hiding one without
+        # the other leaves either floating lines or blank grey walls.
+        ax.grid(False)
+        for axis in (ax.xaxis, ax.yaxis, ax.zaxis):
+            axis.pane.set_visible(False)
+    if max_ticks != None:
+        for axis in (ax.xaxis, ax.yaxis, ax.zaxis):
+            axis.set_major_locator(matplotlib.ticker.MaxNLocator(max_ticks))
     if axis_labels:
         ax.set_xlabel(xlabel, fontsize=fontsize)
         ax.set_ylabel(ylabel, fontsize=fontsize)
