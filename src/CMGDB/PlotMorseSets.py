@@ -6,7 +6,8 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
-from matplotlib.patches import Rectangle
+from matplotlib.patches import PathPatch, Rectangle
+from matplotlib.path import Path
 import CMGDB
 
 # Default color list
@@ -15,6 +16,12 @@ DEFAULT_CLIST = ['#1f77b4', '#e6550d', '#31a354', '#d62728', '#9467bd', '#8c564b
                  '#fb8072', '#dbdb8d', '#bc80bd', '#ffed6f', '#637939', '#c5b0d5', '#636363', '#c7c7c7',
                  '#8dd3c7', '#b15928', '#e8cb32', '#9e9ac8', '#74c476', '#ff7f0e', '#9edae5', '#90d743',
                  '#e7969c', '#17becf', '#7b4173', '#8ca252', '#ad494a', '#8c6d31', '#a55194', '#00cc49']
+
+# Face count above which PlotMorseSets3D rasterizes by default. Measured on
+# cubical tubes: vector output costs 24-30 bytes a face, the 600 dpi bitmap
+# 1.4 MB at 25k faces and 2.1 MB at 75k, where the two are the same size. Vector
+# is preferred at a tie, having no resolution ceiling, so the switch sits above.
+RASTERIZE_FACES = 100000
 
 
 def _load_morse_sets(morse_sets):
@@ -112,7 +119,14 @@ def _finish(fig, ax, fig_fname, dpi, show, rasterized=False):
     emit a warning on every call, while in a notebook the figure appears
     anyway. Returning ``(fig, ax)`` lets a caller adjust the plot before
     saving, which was previously impossible.
+
+    ``dpi=None`` resolves to 600 when the plot is rasterized and to 300
+    otherwise. On a vector page the number only sets the resolution of the
+    embedded bitmap, where 600 keeps it sharp in print at little cost; a
+    fully vector page ignores it, and a bitmap format keeps its former size.
     """
+    if dpi == None:
+        dpi = 600 if rasterized else 300
     if fig_fname:
         # Scale so ``dpi`` is the resolution obtained on the page, not the one
         # requested of a bitmap that covers only part of it.
@@ -177,9 +191,124 @@ def _axis_limits(rows, morse_nodes, dim, d1, d2, xlim, ylim,
     return x_min, x_max, y_min, y_max
 
 
+def _grid_index(lower, upper):
+    """Integer grid coordinates of boxes that share one aligned grid.
+
+       CMGDB's subdivision produces boxes of one size on one lattice, which is
+       what lets adjacency be decided by index arithmetic instead of geometry.
+       Returns (origin, cell, index) with lower == origin + index * cell, or
+       None when the boxes do not fit one grid -- mixed depths, say -- and the
+       caller must fall back to per-box geometry.
+    """
+    widths = upper - lower
+    cell = np.median(widths, axis=0)
+    if not (np.all(cell > 0) and np.allclose(widths, cell, rtol=1e-8, atol=1e-11)):
+        return None
+    origin = lower.min(axis=0)
+    index = np.rint((lower - origin) / cell).astype(np.int64)
+    if not np.allclose(lower, origin + index * cell, rtol=1e-8, atol=1e-10):
+        return None
+    return origin, cell, index
+
+
+def _outline_loops(index):
+    """Boundary of a set of grid cells as closed loops of vertex indices.
+
+       Cell (i, j) covers [i, i+1] x [j, j+1]. A side lies on the boundary
+       exactly when the cell across it is absent, so the boundary is found by
+       index lookups: the two-dimensional counterpart of _exposed_faces. Each
+       boundary side is directed with its own cell on the left; chained head
+       to tail, outer boundaries then wind counter-clockwise and holes
+       clockwise, which is what the nonzero fill rule of the PDF and Agg
+       backends needs to leave a hole empty. Where two components touch at a
+       corner the left turn keeps each on its own loop; every side is used
+       exactly once with that winding, so a loop that does pass through such a
+       vertex still fills correctly. Collinear vertices are dropped, so a
+       straight run of cells costs one segment however long it is.
+    """
+    index = np.unique(np.asarray(index, dtype=np.int64), axis=0)
+    if len(index) == 0:
+        return []
+    i0, j0 = index.min(axis=0)
+    i, j = index[:, 0] - i0, index[:, 1] - j0
+    stride = j.max() + 2            # j + 1 stays below it, so keys never collide
+    occupied = np.sort(i * stride + j)
+    sides = []
+    # (neighbour offset, side start, side end): each side runs so that its
+    # own cell lies on the left
+    for (di, dj), (ax, ay), (bx, by) in (((0, -1), (0, 0), (1, 0)),    # bottom, +x
+                                         ((1, 0), (1, 0), (1, 1)),     # right, +y
+                                         ((0, 1), (1, 1), (0, 1)),     # top, -x
+                                         ((-1, 0), (0, 1), (0, 0))):   # left, -y
+        exposed = ~np.isin((i + di) * stride + (j + dj), occupied)
+        sides.append(np.column_stack([i[exposed] + ax, j[exposed] + ay,
+                                      i[exposed] + bx, j[exposed] + by]))
+    sides = np.concatenate(sides)
+
+    vstride = j.max() + 3           # vertex coordinates run one past the cells
+    leaving = {}
+    for e, k in enumerate((sides[:, 0] * vstride + sides[:, 1]).tolist()):
+        leaving.setdefault(k, []).append(e)
+    used = np.zeros(len(sides), dtype=bool)
+    loops = []
+    for first in range(len(sides)):
+        if used[first]:
+            continue
+        loop, e = [], first
+        while True:
+            used[e] = True
+            loop.append(sides[e, :2])
+            end = sides[e, 2:]
+            candidates = [c for c in leaving.get(int(end[0] * vstride + end[1]), [])
+                          if not used[c]]
+            if not candidates:
+                break               # back at the start: in and out degrees match
+            if len(candidates) == 1:
+                e = candidates[0]
+            else:
+                # Two components meet at this corner. The interior is on the
+                # left, so the left turn continues along this component.
+                step = end - sides[e, :2]
+                left = np.array([-step[1], step[0]])
+                e = max(candidates, key=lambda c: int((sides[c, 2:] - sides[c, :2]) @ left))
+        loop = np.array(loop)
+        # A vertex between two sides of the same direction is not a corner.
+        step = np.roll(loop, -1, axis=0) - loop
+        corner = np.any(step != np.roll(step, 1, axis=0), axis=1)
+        loops.append(loop[corner] + (i0, j0))
+    return loops
+
+
+def _merged_outline(lower, upper):
+    """One compound path covering the union of aligned boxes, or None.
+
+       Drawing a Morse set as the outline of its boxes rather than as the boxes
+       themselves is what keeps the file small: a set of 10^5 cells is a
+       handful of polygons, and every interior edge was invisible anyway.
+    """
+    grid = _grid_index(lower, upper)
+    if grid is None:
+        return None
+    origin, cell, index = grid
+    vertices, codes = [], []
+    for loop in _outline_loops(index):
+        points = origin + loop * cell
+        vertices.extend(points.tolist())
+        vertices.append(points[0].tolist())
+        codes.extend([Path.MOVETO] + [Path.LINETO] * (len(points) - 1) + [Path.CLOSEPOLY])
+    return Path(vertices, codes)
+
+
 def _draw_boxes(ax, rows, morse_nodes, dim, d1, d2, cmap, cmap_norm,
-                scale_factor, edge_clr, linewidth, alpha, rasterize):
-    """Add one PatchCollection per Morse set to ax. Returns the collections."""
+                scale_factor, edge_clr, linewidth, alpha, rasterize, merge_boxes=True):
+    """Add one artist per Morse set to ax. Returns the artists.
+
+       By default a set is one PathPatch, the outline of the union of its
+       boxes (see _merged_outline). The boxes are drawn one by one, as a
+       PatchCollection, when merging is switched off, when the boxes do not
+       share one grid, when a scale_factor other than 1 moves them off it, or
+       when an explicit edge_clr asks for each box to be outlined.
+    """
     drawn = []
     for morse_node in morse_nodes:
         morse_set = [rect for rect in rows if int(rect[-1]) == morse_node]
@@ -187,23 +316,33 @@ def _draw_boxes(ax, rows, morse_nodes, dim, d1, d2, cmap, cmap_norm,
             continue
         clr = matplotlib.colors.to_hex(cmap(cmap_norm(morse_node)), keep_alpha=True)
         factor = scale_factor[morse_node]
-        patches = []
-        for rect in morse_set:
-            x0, y0 = rect[d1], rect[d2]
-            x1, y1 = rect[dim + d1], rect[dim + d2]
-            width, height = (x1 - x0) * factor, (y1 - y0) * factor
-            cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-            patches.append(Rectangle((cx - width / 2, cy - height / 2), width, height))
-        # One collection per Morse set rather than one artist per box: the box
-        # count reaches 10^5 routinely and per-artist overhead dominates there.
         # Edge in the face colour by default: it closes the antialiasing seam
         # between neighbouring boxes instead of outlining each one.
         edges = clr if edge_clr == None else edge_clr
-        collection = PatchCollection(patches, facecolors=clr, edgecolors=edges,
+        path = None
+        if merge_boxes and edge_clr == None and factor == 1:
+            boxes = np.asarray([[float(v) for v in rect] for rect in morse_set])
+            path = _merged_outline(boxes[:, [d1, d2]], boxes[:, [dim + d1, dim + d2]])
+        if path is not None:
+            artist = PathPatch(path, facecolor=clr, edgecolor=edges, linewidth=linewidth,
+                               alpha=alpha, rasterized=rasterize)
+            ax.add_patch(artist)
+        else:
+            patches = []
+            for rect in morse_set:
+                x0, y0 = rect[d1], rect[d2]
+                x1, y1 = rect[dim + d1], rect[dim + d2]
+                width, height = (x1 - x0) * factor, (y1 - y0) * factor
+                cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+                patches.append(Rectangle((cx - width / 2, cy - height / 2), width, height))
+            # One collection per Morse set rather than one artist per box: the
+            # box count reaches 10^5 routinely and per-artist overhead
+            # dominates there.
+            artist = PatchCollection(patches, facecolors=clr, edgecolors=edges,
                                      linewidths=linewidth, alpha=alpha,
                                      rasterized=rasterize)
-        ax.add_collection(collection)
-        drawn.append(collection)
+            ax.add_collection(artist)
+        drawn.append(artist)
     return drawn
 
 
@@ -238,7 +377,7 @@ def _inset_corner(ax, region):
 
 
 def _add_zoom_inset(ax, rows, morse_nodes, dim, d1, d2, cmap, cmap_norm,
-                    scale_factor, edge_clr, linewidth, alpha, rasterize,
+                    scale_factor, edge_clr, linewidth, alpha, rasterize, merge_boxes,
                     zoom_nodes, zoom_bounds, zoom_pos, zoom_pad, zoom_square,
                     zoom_edge_clr, zoom_lw, zoom_ticks, fontsize):
     """Draw a magnified copy of one region, boxed and joined to its source.
@@ -260,7 +399,7 @@ def _add_zoom_inset(ax, rows, morse_nodes, dim, d1, d2, cmap, cmap_norm,
     # Every set is redrawn, not just the zoomed ones: neighbouring structure is
     # what makes the magnified view legible as part of the whole picture.
     _draw_boxes(axins, rows, morse_nodes, dim, d1, d2, cmap, cmap_norm,
-                scale_factor, edge_clr, linewidth, alpha, rasterize)
+                scale_factor, edge_clr, linewidth, alpha, rasterize, merge_boxes)
     axins.set_xlim(region[0], region[1])
     axins.set_ylim(region[2], region[3])
     if zoom_ticks:
@@ -281,8 +420,8 @@ def PlotMorseSets(morse_sets, morse_nodes=None, proj_dims=None, cmap=None, clist
                   axis_labels=True, xlabel='$x$', ylabel='$y$', fontsize=15, edge_clr=None,
                   linewidth=0.5, alpha=None, zoom_nodes=None, zoom_bounds=None,
                   zoom_pos=None, zoom_pad=0.25, zoom_square=True, zoom_edge_clr='0.35',
-                  zoom_lw=0.8, zoom_ticks=False, fig_fname=None, dpi=300, rasterize=False,
-                  show=None):
+                  zoom_lw=0.8, zoom_ticks=False, merge_boxes=True, fig_fname=None,
+                  dpi=None, rasterize=False, show=None):
     """Plot Morse sets as filled rectangles, one per box.
 
        Each box is drawn at its true extent, so the picture is exact at any
@@ -322,9 +461,19 @@ def PlotMorseSets(morse_sets, morse_nodes=None, proj_dims=None, cmap=None, clist
        honoured as given, and needs no unpacking. A scalar alpha overrides any
        per-colour alpha, which is why it is not set by default.
 
-       rasterize draws the boxes as a raster image inside the vector figure.
-       That keeps the file small when a Morse set has many boxes, at the cost
-       of a resolution ceiling; the default keeps the output fully vector.
+       merge_boxes draws each Morse set as a single path, the outline of the
+       union of its boxes, rather than as one rectangle per box. The picture
+       is the same -- the interior edges were never visible -- but a set of
+       10^5 boxes becomes a few polygons, so the file is orders of magnitude
+       smaller and opens at once. Set it False to draw the boxes one by one
+       as before; that also happens by itself when the boxes do not share one
+       grid, when a scale_factor other than 1 moves them off it, or when an
+       explicit edge_clr asks for each box to be outlined.
+
+       rasterize draws the boxes as a raster image inside the vector figure,
+       at dpi (600 by default when rasterizing). With merge_boxes the vector
+       output is already small, so this mainly serves the fallback cases
+       above; it costs a resolution ceiling.
 
        Returns (fig, ax).
     """
@@ -350,11 +499,11 @@ def PlotMorseSets(morse_sets, morse_nodes=None, proj_dims=None, cmap=None, clist
     ax.set_ylim([y_min, y_max])
 
     drawn = _draw_boxes(ax, rows, morse_nodes, dim, d1, d2, cmap, cmap_norm,
-                        scale_factor, edge_clr, linewidth, alpha, rasterize)
+                        scale_factor, edge_clr, linewidth, alpha, rasterize, merge_boxes)
 
     if zoom_nodes != None or zoom_bounds != None:
         _add_zoom_inset(ax, rows, morse_nodes, dim, d1, d2, cmap, cmap_norm,
-                        scale_factor, edge_clr, linewidth, alpha, rasterize,
+                        scale_factor, edge_clr, linewidth, alpha, rasterize, merge_boxes,
                         zoom_nodes, zoom_bounds, zoom_pos, zoom_pad, zoom_square,
                         zoom_edge_clr, zoom_lw, zoom_ticks, fontsize)
 
@@ -369,7 +518,7 @@ def PlotMorseSets1D(morse_sets, morse_nodes=None, cmap=None, clist=None, scale_f
                     fig_w=8, fig_h=None, xlim=None, axis_labels=True, xlabel='$x$',
                     axis_arrow=True, fontsize=15, height=0.18, edge_clr=None,
                     linewidth=0.5, alpha=None, label_sets=True, merge_tol=1e-9,
-                    fig_fname=None, dpi=300, rasterize=False, show=None):
+                    fig_fname=None, dpi=None, rasterize=False, show=None):
     """Plot one-dimensional Morse sets as boxes sitting on the axis.
 
        Every set is drawn on the same line, which is what a one-dimensional
@@ -494,17 +643,13 @@ def _exposed_faces(rows, morse_nodes, scale_factor):
     """
     values = np.asarray([[float(v) for v in rect] for rect in rows], dtype=float)
     lower, upper, labels = values[:, :3], values[:, 3:6], values[:, 6].astype(int)
-    widths = upper - lower
-    cell = np.median(widths, axis=0)
-    aligned = bool(np.all(cell > 0)) and np.allclose(widths, cell, rtol=1e-8, atol=1e-11)
+    grid = _grid_index(lower, upper)
+    aligned = grid is not None
     occupied = set()
     if aligned:
-        origin = lower.min(axis=0)
-        index = np.rint((lower - origin) / cell).astype(np.int64)
-        aligned = np.allclose(lower, origin + index * cell, rtol=1e-8, atol=1e-10)
-        if aligned:
-            occupied = {(int(l), int(i[0]), int(i[1]), int(i[2]))
-                        for l, i in zip(labels, index)}
+        index = grid[2]
+        occupied = {(int(l), int(i[0]), int(i[1]), int(i[2]))
+                    for l, i in zip(labels, index)}
     faces, face_labels = [], []
     for k in range(values.shape[0]):
         label = int(labels[k])
@@ -570,7 +715,7 @@ def PlotMorseSets3D(morse_sets, morse_nodes=None, cmap=None, clist=None, scale_f
                     alpha=1.0, edge_clr=None, linewidth=0.0, lighting=True,
                     light_azdeg=300.0, light_altdeg=55.0, shade_strength=0.32,
                     grid=False, max_ticks=4, zlabel_pos=None, fig_fname=None,
-                    dpi=300, rasterize=False, show=None):
+                    dpi=None, rasterize=None, show=None):
     """Plot three-dimensional Morse sets as cubical surfaces.
 
        Only faces on the boundary of a Morse set are drawn, so the cost follows
@@ -593,6 +738,15 @@ def PlotMorseSets3D(morse_sets, morse_nodes=None, cmap=None, clist=None, scale_f
        z label when the figure is saved with a tight bounding box, so the label
        is drawn as an unclipped 2-D annotation instead of on the axis.
 
+       rasterize draws the faces as one bitmap inside the vector figure, at
+       dpi (600 by default when rasterizing); axes, ticks and labels stay
+       vector. None, the default, decides by size. A cubical surface is a
+       polygon per exposed cell face, painted in depth order, so unlike the
+       2-D plot it cannot be merged into fewer paths: vector output grows
+       with the face count while the bitmap grows far more slowly, so sets
+       with more than RASTERIZE_FACES faces are rasterized and smaller ones
+       stay fully vector. True or False forces either.
+
        Returns (fig, ax).
     """
     from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -607,6 +761,8 @@ def PlotMorseSets3D(morse_sets, morse_nodes=None, cmap=None, clist=None, scale_f
     faces, face_labels, aligned = _exposed_faces(rows, morse_nodes, scale_factor)
     if len(faces) == 0:
         raise ValueError("no Morse set boxes to plot")
+    if rasterize == None:
+        rasterize = len(faces) > RASTERIZE_FACES
     if lighting:
         facecolors = _shaded_facecolors(faces, face_labels, cmap, cmap_norm,
                                         light_azdeg=light_azdeg, light_altdeg=light_altdeg,
