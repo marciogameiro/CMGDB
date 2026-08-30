@@ -123,7 +123,10 @@ std::pair<MorseGraph, MapGraph> ComputeConleyMorseGraph ( Model const& model,
     Subset subset = phase_space_chomp -> subset ( * morsegraph . grid ( v ) );
     std::shared_ptr<chomp::ConleyIndex_t> conley ( new chomp::ConleyIndex_t );
     morsegraph . conleyIndex ( v ) = conley;
-    ChompMap chomp_map ( map );
+    // The Conley phase gathers its map evaluations and runs them through
+    // the batched evaluator when the model provides one, chunked by the
+    // same batch_chunk_size that governs the transition-graph passes.
+    ChompMap chomp_map ( map, batch_chunk_size );
     chomp::ConleyIndex ( conley . get (), *phase_space_chomp, subset, chomp_map );
   }
 

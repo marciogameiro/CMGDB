@@ -85,13 +85,24 @@ ConleyIndex ( ConleyIndex_t * output,
   CellDictionary X_cells;
   CellDictionary S_cells;
   Combinatorial_Map G;
-  std::insert_iterator<CellDictionary> Xc_ii ( X_cells, X_cells . begin () );
+  // Evaluate the map on every cell of S through F.images, which batches the
+  // evaluations when the underlying map supports it (one call per chunk
+  // instead of one per cell). Covering the images in the gathering order
+  // reproduces the insertion sequence of the former per-cell loop exactly.
+  typedef decltype ( grid . geometry ( typename Grid::GridElement () ) ) Geometry;
+  std::vector < Geometry > S_geometries;
+  S_geometries . reserve ( S . size () );
   BOOST_FOREACH ( Cell cell, S ) {
     S_cells . insert ( cell );
-    std::vector < typename Grid::GridElement > image = 
-      grid . cover ( F ( grid . geometry ( cell ) ) );
-    std::copy ( image . begin (), image . end (), Xc_ii );
+    S_geometries . push_back ( grid . geometry ( cell ) );
   } /* boost_foreach */
+  std::vector < Geometry > S_images = F . images ( S_geometries );
+  std::insert_iterator<CellDictionary> Xc_ii ( X_cells, X_cells . begin () );
+  for ( size_t k = 0; k < S_images . size (); ++ k ) {
+    std::vector < typename Grid::GridElement > image =
+      grid . cover ( S_images [ k ] );
+    std::copy ( image . begin (), image . end (), Xc_ii );
+  }
   /* Construct X and A */
   // note: The cells in A are those in X not in S.
   Subset X, A;

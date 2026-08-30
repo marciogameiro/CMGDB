@@ -72,11 +72,49 @@ RelativeMapHomology (RelativeMapHomology_t * output,
   PRINT "RMH: (Y, B) size = (" << codomain_pair.pair().size() << ", " 
         << codomain_pair . relative () . size () << ")\n";
 
-  PRINT "RMH: (X, A) top size = (" << domain_pair.pair().size(D) << ", " 
+  PRINT "RMH: (X, A) top size = (" << domain_pair.pair().size(D) << ", "
         << domain_pair . relative () . size (D) << ")\n";
-  PRINT "RMH: (Y, B) top size = (" << codomain_pair.pair().size(D) << ", " 
+  PRINT "RMH: (Y, B) top size = (" << codomain_pair.pair().size(D) << ", "
         << codomain_pair . relative () . size (D) << ")\n";
 
+  /// Memoized map evaluations on the top cells of the domain complex.
+  /// Every fiber built below evaluates the map only on top cells of
+  /// full_domain, and a given top cell lies in the neighborhood of about
+  /// 3^D fibers, so evaluating inside the fiber constructor repeats the
+  /// same evaluation many times. Instead each top cell is evaluated at
+  /// most once, on the first fiber that needs it, and the fibers consume
+  /// the memoized combinatorial map -- the same data the per-fiber
+  /// evaluations produced. The chain lifts touch only a sparse subset of
+  /// the top cells, which is why the table is filled lazily rather than
+  /// for the whole complex up front. A fiber's missing entries are
+  /// evaluated in a single call through F.images, which uses the map's
+  /// batched evaluator when it has one.
+  std::unordered_map < uint64_t, std::vector < uint64_t > > F_top;
+  auto materialize_fiber_images =
+    [&] ( const boost::unordered_set < Index > & fiber_X_nbs,
+          const boost::unordered_set < Index > & fiber_A_nbs ) {
+      std::vector < Index > missing;
+      auto collect = [&] ( const boost::unordered_set < Index > & nbs ) {
+        BOOST_FOREACH ( Index i, nbs ) {
+          if ( F_top . count ( i ) == 0 ) {
+            F_top [ i ];  // placeholder: marks i as gathered
+            missing . push_back ( i );
+          }
+        }
+      };
+      collect ( fiber_X_nbs );
+      collect ( fiber_A_nbs );
+      if ( missing . empty () ) return;
+      std::vector < Rect > geometries;
+      geometries . reserve ( missing . size () );
+      for ( Index i : missing ) {
+        geometries . push_back ( full_domain . geometry ( i, D ) );
+      }
+      std::vector < Rect > images = F . images ( geometries );
+      for ( size_t k = 0; k < missing . size (); ++ k ) {
+        F_top [ missing [ k ] ] = full_codomain . cover ( images [ k ] );
+      }
+    };
 
   /// Generate "domain_GridElements_X" and "domain_GridElements_A" tables
   /// These are for determining which top cells are involved in
@@ -270,7 +308,8 @@ RelativeMapHomology (RelativeMapHomology_t * output,
         //std::cout << "   A_nbs . size () = " << A_nbs . size () << "\n";
         ////////////////////////////////
         
-        FiberComplex fiber ( X_nbs, A_nbs, full_domain, full_codomain, F );
+        materialize_fiber_images ( X_nbs, A_nbs );
+        FiberComplex fiber ( X_nbs, A_nbs, full_domain, full_codomain, F_top );
         //std::cout << "CHECKPOINT Y\n";
 
 
@@ -316,8 +355,9 @@ RelativeMapHomology (RelativeMapHomology_t * output,
           // Determine fiber
           boost::unordered_set < Index > X_nbs, A_nbs;
           X_nbs = domain_GridElements_X [ fd ] [ fiberchain . first ];
-          A_nbs = domain_GridElements_A [ fd ] [ fiberchain . first ];    
-          FiberComplex fiber ( X_nbs, A_nbs, full_domain, full_codomain, F );
+          A_nbs = domain_GridElements_A [ fd ] [ fiberchain . first ];
+          materialize_fiber_images ( X_nbs, A_nbs );
+          FiberComplex fiber ( X_nbs, A_nbs, full_domain, full_codomain, F_top );
           
           // TODO: option to turn this check off.
 #ifndef CONLEY_INDEX_NO_ACYCLIC_CHECKS
@@ -473,8 +513,9 @@ RelativeMapHomology (RelativeMapHomology_t * output,
       if ( rand () % 10 != 0 ) continue;
       boost::unordered_set < Index > X_nbs, A_nbs;
       X_nbs = domain_GridElements_X [ d ] [ i ];
-      A_nbs = domain_GridElements_A [ d ] [ i ];   
-      FiberComplex fiber ( X_nbs, A_nbs, full_domain, full_codomain, F );
+      A_nbs = domain_GridElements_A [ d ] [ i ];
+      materialize_fiber_images ( X_nbs, A_nbs );
+      FiberComplex fiber ( X_nbs, A_nbs, full_domain, full_codomain, F_top );
       graph_size += 10 * fiber . size ();
       if ( d == D ) edge_graph_size += 10 * fiber . size ( D );
     }
