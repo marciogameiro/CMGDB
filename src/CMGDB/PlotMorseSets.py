@@ -1,7 +1,6 @@
 ### PlotMorseSets.py
 ### MIT LICENSE 2026 Marcio Gameiro
 
-import sys
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
@@ -498,8 +497,8 @@ def PlotMorseSets(morse_sets, morse_nodes=None, proj_dims=None, cmap=None, clist
     ax.set_xlim([x_min, x_max])
     ax.set_ylim([y_min, y_max])
 
-    drawn = _draw_boxes(ax, rows, morse_nodes, dim, d1, d2, cmap, cmap_norm,
-                        scale_factor, edge_clr, linewidth, alpha, rasterize, merge_boxes)
+    _draw_boxes(ax, rows, morse_nodes, dim, d1, d2, cmap, cmap_norm,
+                scale_factor, edge_clr, linewidth, alpha, rasterize, merge_boxes)
 
     if zoom_nodes != None or zoom_bounds != None:
         _add_zoom_inset(ax, rows, morse_nodes, dim, d1, d2, cmap, cmap_norm,
@@ -709,6 +708,49 @@ def _shaded_facecolors(faces, face_labels, cmap, cmap_norm, light_azdeg=300.0,
     return np.clip(shaded, 0.0, 1.0)
 
 
+def _place_zlabel_clear_of_ticks(fig, ax, label, pad_points):
+    """Keep a 3-D z label just clear of the z tick numbers, on every draw.
+
+       The label is a 2-D annotation positioned in axes fractions, but where
+       the z tick numbers land is decided by the projection: the camera, the
+       box aspect and the width of the numbers themselves all move them, and a
+       caller is free to change any of those after the plot is built. A
+       position fixed in advance therefore cannot stay clear of them. Measure
+       the tick numbers instead, each time the figure is drawn, and nudge the
+       label to their right, centred on their span.
+
+       The nudge is relative and settles in one draw, so the label is already
+       in place when a tight bounding box is measured at save time (that pass
+       draws the figure first). Repositioning stops once the label is within
+       half a pixel of where it should be, so an interactive backend cannot be
+       driven into a redraw loop.
+    """
+    def reposition(event):
+        renderer = getattr(event, 'renderer', None)
+        # Only ticks inside the view are placed by the 3-D axis when it draws;
+        # the rest keep whatever position they last had, which is nowhere in
+        # particular, so measuring them would throw the label off the page.
+        low, high = sorted(ax.zaxis.get_view_interval())
+        boxes = [tick.label1.get_window_extent(renderer)
+                 for tick in ax.zaxis.get_major_ticks()
+                 if low <= tick.get_loc() <= high
+                 and tick.label1.get_visible() and tick.label1.get_text()]
+        boxes = [box for box in boxes if box.width > 0 and box.height > 0]
+        if len(boxes) == 0:
+            # No tick numbers to clear: leave the label where it was placed.
+            return
+        own = label.get_window_extent(renderer)
+        axes_box = ax.get_window_extent(renderer)
+        dx = max(box.x1 for box in boxes) + pad_points * fig.dpi / 72.0 - own.x0
+        dy = 0.5 * (min(box.y0 for box in boxes) + max(box.y1 for box in boxes)
+                    - own.y0 - own.y1)
+        if abs(dx) < 0.5 and abs(dy) < 0.5:
+            return
+        x_pos, y_pos = label.get_position()
+        label.set_position((x_pos + dx / axes_box.width, y_pos + dy / axes_box.height))
+    fig.canvas.mpl_connect('draw_event', reposition)
+
+
 def PlotMorseSets3D(morse_sets, morse_nodes=None, cmap=None, clist=None, scale_factor=None,
                     fig_w=8, fig_h=8, xlim=None, ylim=None, zlim=None, axis_labels=True,
                     xlabel='$x$', ylabel='$y$', zlabel='$z$', fontsize=15, elev=22, azim=-55,
@@ -734,9 +776,12 @@ def PlotMorseSets3D(morse_sets, morse_nodes=None, cmap=None, clist=None, scale_f
        numbers along three foreshortened edges, so far fewer fit legibly than
        on a plane; None keeps Matplotlib's default density.
 
-       zlabel_pos places the z label in axes fractions. Matplotlib clips a 3-D
-       z label when the figure is saved with a tight bounding box, so the label
-       is drawn as an unclipped 2-D annotation instead of on the axis.
+       zlabel_pos pins the z label to a position in axes fractions. Matplotlib
+       clips a 3-D z label when the figure is saved with a tight bounding box,
+       so the label is drawn as an unclipped 2-D annotation instead of on the
+       axis. None, the default, measures it into place beside the z tick
+       numbers at draw time, which keeps it clear of them however the camera,
+       the box aspect or the tick numbers change; a pinned position stays put.
 
        rasterize draws the faces as one bitmap inside the vector figure, at
        dpi (600 by default when rasterizing); axes, ticks and labels stay
@@ -805,9 +850,14 @@ def PlotMorseSets3D(morse_sets, morse_nodes=None, cmap=None, clist=None, scale_f
         # unclipped copy clear of the tick numbers.
         ax.set_zlabel('')
         x_pos, y_pos = (1.04, 0.55) if zlabel_pos == None else zlabel_pos
-        ax.text2D(x_pos, y_pos, zlabel, transform=ax.transAxes, rotation=90,
-                  rotation_mode='anchor', ha='center', va='center',
-                  fontsize=fontsize, clip_on=False)
+        z_label = ax.text2D(x_pos, y_pos, zlabel, transform=ax.transAxes, rotation=90,
+                            rotation_mode='anchor', ha='center', va='center',
+                            fontsize=fontsize, clip_on=False)
+        if zlabel_pos == None:
+            # The pair above is only where the label starts: it is measured
+            # beside the tick numbers on the first draw. Pad by a third of the
+            # text size, as Matplotlib spaces its own labels off an axis.
+            _place_zlabel_clear_of_ticks(fig, ax, z_label, pad_points=fontsize / 3.0)
     ax.tick_params(labelsize=fontsize)
     return _finish(fig, ax, fig_fname, dpi, show, rasterize)
 
@@ -835,15 +885,15 @@ def PlotMorseSetsScatter(morse_sets, morse_nodes=None, proj_dims=None, cmap=None
     return PlotBoxesScatter(rows, num_morse_sets=num_morse_sets, morse_nodes=morse_nodes,
                             proj_dims=proj_dims, cmap=cmap, clist=clist,
                             scale_factor=scale_factor, fig_w=fig_w, fig_h=fig_h,
-                            xlim=xlim, ylim=ylim, axis_labels=axis_labels, xlabel=xlabel,
-                            ylabel=ylabel, fontsize=fontsize, fig_fname=fig_fname, dpi=dpi,
-                            rasterize=rasterize, show=show)
+                            xlim=xlim, ylim=ylim, margin=margin, axis_labels=axis_labels,
+                            xlabel=xlabel, ylabel=ylabel, fontsize=fontsize,
+                            fig_fname=fig_fname, dpi=dpi, rasterize=rasterize, show=show)
 
 
 def PlotBoxesScatter(morse_sets, num_morse_sets=None, morse_nodes=None, proj_dims=None, cmap=None,
                      clist=None, scale_factor=None, fig_w=8, fig_h=8, xlim=None, ylim=None,
-                     axis_labels=True, xlabel='$x$', ylabel='$y$', fontsize=15, fig_fname=None,
-                     dpi=300, rasterize=False, show=None):
+                     margin=0.02, axis_labels=True, xlabel='$x$', ylabel='$y$', fontsize=15,
+                     fig_fname=None, dpi=300, rasterize=False, show=None):
     """Scatter plot of labelled boxes, markers sized in data units."""
     rows = list(morse_sets)
     dim = _box_dim(rows)

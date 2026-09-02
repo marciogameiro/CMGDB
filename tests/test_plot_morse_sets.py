@@ -162,3 +162,75 @@ def test_3d_rasterize_is_decided_by_face_count(monkeypatch, tmp_path):
     fig, ax = CMGDB.PlotMorseSets3D(rows, rasterize=True, show=False)
     assert ax.collections[0].get_rasterized()
     plt.close(fig)
+
+
+def domain_rows():
+    """A few boxes spanning the 3-D Leslie domain, whose z ticks are two digits."""
+    upper = (106.0, 74.0, 52.0)
+    rows = [[0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0],
+            [u - 1.0 for u in upper] + list(upper) + [1]]
+    return rows + [[0.4 * upper[0], 0.4 * upper[1], 0.4 * upper[2],
+                    0.6 * upper[0], 0.6 * upper[1], 0.6 * upper[2], 0]]
+
+
+def zlabel_and_ticks(fig, ax, text='$z$'):
+    """The drawn z label and the tick numbers it has to clear, in pixels."""
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    label = [t for t in ax.texts if t.get_text() == text][0]
+    low, high = sorted(ax.zaxis.get_view_interval())
+    ticks = [tick.label1 for tick in ax.zaxis.get_major_ticks()
+             if low <= tick.get_loc() <= high and tick.label1.get_visible()]
+    return (label, label.get_window_extent(renderer),
+            [t.get_window_extent(renderer) for t in ticks])
+
+
+def test_zlabel_is_measured_clear_of_the_z_tick_numbers():
+    # The paper camera: a wide box aspect pushes the projection past the axes,
+    # taking the tick numbers with it, so a label at a fixed axes fraction ends
+    # up on top of them. Measured placement follows.
+    fig, ax = CMGDB.PlotMorseSets3D(domain_rows(), show=False)
+    ax.set_box_aspect((110.0, 77.0, 54.0))
+    ax.set_proj_type('ortho')
+    label, own, ticks = zlabel_and_ticks(fig, ax)
+    assert len(ticks) > 1
+    assert not any(own.overlaps(box) for box in ticks)
+    assert own.x0 > max(box.x1 for box in ticks)
+    # Centred on the column of numbers rather than on the axes.
+    span = (min(box.y0 for box in ticks), max(box.y1 for box in ticks))
+    assert 0.5 * (own.y0 + own.y1) == pytest.approx(0.5 * sum(span), abs=1.0)
+    plt.close(fig)
+
+
+def test_zlabel_follows_a_camera_change():
+    fig, ax = CMGDB.PlotMorseSets3D(domain_rows(), show=False)
+    _label, _own, before = zlabel_and_ticks(fig, ax)
+    ax.view_init(elev=60.0, azim=-20.0)
+    label, own, ticks = zlabel_and_ticks(fig, ax)
+    assert max(box.x1 for box in ticks) != max(box.x1 for box in before)
+    assert not any(own.overlaps(box) for box in ticks)
+    assert own.x0 > max(box.x1 for box in ticks)
+    plt.close(fig)
+
+
+def test_zlabel_pos_pins_the_label():
+    fig, ax = CMGDB.PlotMorseSets3D(domain_rows(), zlabel_pos=(1.06, 0.60), show=False)
+    ax.set_box_aspect((110.0, 77.0, 54.0))
+    label, _own, _ticks = zlabel_and_ticks(fig, ax)
+    assert label.get_position() == (1.06, 0.60)
+    plt.close(fig)
+
+
+def test_scatter_plots_draw_and_pad_by_the_margin():
+    # Both entry points were unreachable: PlotBoxesScatter named a margin it
+    # did not take, and PlotMorseSetsScatter dropped its own when delegating.
+    rows = blob_rows()
+    fig, ax = CMGDB.PlotBoxesScatter(rows, margin=0.0, show=False)
+    tight = ax.get_xlim()
+    assert len(ax.collections) == 2          # one scatter per Morse set
+    plt.close(fig)
+    fig, ax = CMGDB.PlotMorseSetsScatter(rows, margin=0.25, show=False)
+    padded = ax.get_xlim()
+    plt.close(fig)
+    pad = 0.25 * (tight[1] - tight[0])
+    assert padded == pytest.approx((tight[0] - pad, tight[1] + pad))
