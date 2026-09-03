@@ -5,7 +5,8 @@ import numpy as np
 import pytest
 
 import CMGDB
-from CMGDB.PlotMorseSets import _exposed_faces, _grid_index, _merged_outline, _outline_loops
+from CMGDB.PlotMorseSets import (_exposed_faces, _grid_index, _merged_outline, _outline_loops,
+                                 _run_outline_sides, _scaled_runs, _stitch_loops)
 
 
 def signed_area(loop):
@@ -98,12 +99,71 @@ def test_zoom_inset_uses_merged_paths():
 @pytest.mark.parametrize("kwargs, merged, per_box", [
     ({'merge_boxes': False}, 0, 2),
     ({'edge_clr': 'k'}, 0, 2),             # outlined boxes are drawn one by one
-    ({'scale_factor': [1.5, 1]}, 1, 1),    # an inflated set leaves the grid
+    ({'scale_factor': [1.5, 1]}, 2, 0),    # an inflated set merges on a refined grid
+    ({'scale_factor': [1.5, 1], 'alpha': 0.5}, 1, 1),   # translucent overlaps must show
+    ({'scale_factor': [np.pi, 1]}, 1, 1),  # a factor off any small grid falls back
 ])
 def test_per_box_fallbacks(kwargs, merged, per_box):
     fig, ax = CMGDB.PlotMorseSets(blob_rows(), show=False, **kwargs)
     assert len(ax.patches) == merged and len(ax.collections) == per_box
     plt.close(fig)
+
+
+def loop_summary(loops, scale=1):
+    """Loops as (area, vertices), free of where each one happens to start."""
+    out = []
+    for loop in loops:
+        points = np.asarray(loop) * scale
+        x, y = points[:, 0], points[:, 1]
+        area = 0.5 * np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y)
+        out.append((round(float(area), 6), tuple(sorted(map(tuple, points.tolist())))))
+    return sorted(out)
+
+
+def test_run_outline_matches_the_cell_outline():
+    # At factor 1 the refined grid is the cell grid doubled, so the run tracer
+    # has to reproduce the cell tracer exactly -- corner touches included.
+    cells = np.array([(i, j) for i in range(-14, 15) for j in range(-14, 15)
+                      if 5 < np.hypot(i + 0.5, j + 0.5) < 12] + [(15, 15), (16, 16)])
+    refinement, rows = _scaled_runs(cells, 1)
+    assert refinement == 2
+    assert loop_summary(_outline_loops(cells), 2) == loop_summary(
+        _stitch_loops(_run_outline_sides(rows)))
+
+
+def test_inflated_single_box_is_its_scaled_square():
+    lower, upper = np.array([[2.0, 5.0]]), np.array([[2.5, 5.5]])
+    path = _merged_outline(lower, upper, 3)
+    corners = np.unique(path.vertices, axis=0)
+    # Three times the box about its centre (2.25, 5.25): [1.5, 3] x [4.5, 6].
+    assert np.allclose(corners.min(axis=0), [1.5, 4.5])
+    assert np.allclose(corners.max(axis=0), [3.0, 6.0])
+    assert len(path.vertices) == 5          # one closed square
+
+
+def test_inflated_boxes_merge_where_they_overlap():
+    # Two cells three apart merge into one rectangle once inflated past the gap.
+    lower = np.array([[0.0, 0.0], [3.0, 0.0]])
+    upper = np.array([[1.0, 1.0], [4.0, 1.0]])
+    assert len(_merged_outline(lower, upper, 1).vertices) == 10       # two squares
+    merged = _merged_outline(lower, upper, 4)
+    assert len(merged.vertices) == 5                                  # one rectangle
+    assert np.allclose(merged.vertices.min(axis=0), [-1.5, -1.5])
+    assert np.allclose(merged.vertices.max(axis=0), [5.5, 2.5])
+
+
+def test_inflated_merge_draws_what_per_box_drawing_draws():
+    rows = blob_rows()
+    scale = [3, 2.5]
+    fig_m, ax_m = CMGDB.PlotMorseSets(rows, scale_factor=scale, show=False)
+    fig_b, ax_b = CMGDB.PlotMorseSets(rows, scale_factor=scale, merge_boxes=False,
+                                      show=False)
+    assert len(ax_m.patches) == 2 and len(ax_b.collections) == 2
+    a, b = render(fig_m), render(fig_b)
+    # Only antialiasing along the staircase boundary may differ.
+    assert (np.abs(a - b).max(axis=2) > 8).mean() < 0.005
+    plt.close(fig_m)
+    plt.close(fig_b)
 
 
 def test_unaligned_set_falls_back_alone():
@@ -199,6 +259,31 @@ def test_zlabel_is_measured_clear_of_the_z_tick_numbers():
     # Centred on the column of numbers rather than on the axes.
     span = (min(box.y0 for box in ticks), max(box.y1 for box in ticks))
     assert 0.5 * (own.y0 + own.y1) == pytest.approx(0.5 * sum(span), abs=1.0)
+    plt.close(fig)
+
+
+def test_zlabel_is_in_place_the_first_time_it_is_painted(monkeypatch, tmp_path):
+    # What matters is where the label is when it paints, not where it ends up.
+    # A figure saved without a tight bounding box is drawn exactly once, so a
+    # label repositioned after that draw would sit at its starting point in the
+    # first file written and be right only from the second one on.
+    painted = []
+    original = matplotlib.text.Text.draw
+
+    def record(self, renderer):
+        painted.append((id(self), self.get_text(), self.get_window_extent(renderer)))
+        original(self, renderer)
+
+    monkeypatch.setitem(matplotlib.rcParams, 'savefig.bbox', 'standard')
+    monkeypatch.setattr(matplotlib.text.Text, 'draw', record)
+    fig, ax = CMGDB.PlotMorseSets3D(domain_rows(), zlabel='$z_3$', show=False)
+    ax.set_box_aspect((110.0, 77.0, 54.0))
+    fig.savefig(tmp_path / 'first.pdf')
+    z_ticks = {id(tick.label1) for tick in ax.zaxis.get_major_ticks()}
+    own = next(box for _, text, box in painted if text == '$z_3$')
+    ticks = [box for ident, text, box in painted if ident in z_ticks and text]
+    assert ticks
+    assert own.x0 > max(box.x1 for box in ticks)
     plt.close(fig)
 
 

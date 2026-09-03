@@ -1,6 +1,8 @@
 ### PlotMorseSets.py
 ### MIT LICENSE 2026 Marcio Gameiro
 
+from fractions import Fraction
+
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
@@ -21,6 +23,12 @@ DEFAULT_CLIST = ['#1f77b4', '#e6550d', '#31a354', '#d62728', '#9467bd', '#8c564b
 # 1.4 MB at 25k faces and 2.1 MB at 75k, where the two are the same size. Vector
 # is preferred at a tie, having no resolution ceiling, so the switch sits above.
 RASTERIZE_FACES = 100000
+
+# Rows of the refined grid _scaled_runs will work through before it gives up on
+# merging inflated boxes. A display inflation of 20 refines the grid twofold; a
+# factor with a large denominator refines it far more, and the union then costs
+# more to trace than the boxes cost to draw one by one.
+REFINED_ROW_LIMIT = 2000000
 
 
 def _load_morse_sets(morse_sets):
@@ -210,19 +218,169 @@ def _grid_index(lower, upper):
     return origin, cell, index
 
 
+def _merge_runs(starts, ends):
+    """Sorted disjoint half-open intervals covering the same points."""
+    order = np.argsort(starts, kind='stable')
+    starts, ends = starts[order], ends[order]
+    # A run opens where it starts beyond the reach of every run before it.
+    opens = np.empty(len(starts), dtype=bool)
+    opens[0] = True
+    opens[1:] = starts[1:] > np.maximum.accumulate(ends)[:-1]
+    first = np.flatnonzero(opens)
+    return starts[first], np.maximum.reduceat(ends, first)
+
+
+def _subtract_runs(starts, ends, cut_starts, cut_ends):
+    """The parts of one run list left uncovered by another. Both are sorted."""
+    pieces = []
+    ahead = 0
+    for low, high in zip(starts.tolist(), ends.tolist()):
+        while ahead < len(cut_starts) and cut_ends[ahead] <= low:
+            ahead += 1
+        cut, edge = ahead, low
+        while cut < len(cut_starts) and cut_starts[cut] < high:
+            if cut_starts[cut] > edge:
+                pieces.append((edge, min(cut_starts[cut], high)))
+            edge = max(edge, cut_ends[cut])
+            if edge >= high:
+                break
+            cut += 1
+        if edge < high:
+            pieces.append((edge, high))
+    return pieces
+
+
+def _scaled_runs(index, factor):
+    """Rows of runs covering the union of boxes scaled about their centres.
+
+       Cell i of a uniform grid, scaled by factor about its own centre, spans
+       [i + (1 - factor)/2, i + (1 + factor)/2] in cell units, so writing
+       factor as p/q puts every scaled box on the grid refined by 2q: it covers
+       refined cells [2qi + q - p, 2qi + q + p), and their union is a union of
+       refined cells. That union is described here by the runs it covers in
+       each refined row, never cell by cell: inflating a set multiplies the
+       refined cells it covers by the square of the factor -- millions of them
+       for a display inflation of 20 -- while leaving a handful of runs a row.
+
+       Returns (refinement, rows), where rows maps a refined row to its
+       (starts, ends) and refined coordinate X sits at X * cell / refinement,
+       or None when the factor is not a ratio of small whole numbers, or when
+       the refined grid it asks for has more rows than REFINED_ROW_LIMIT: the
+       work is one pass per refined row, so a factor with a large denominator
+       is left to the per-box drawing rather than made slow.
+    """
+    ratio = Fraction(factor).limit_denominator(64)
+    numerator, denominator = ratio.numerator, ratio.denominator
+    if numerator <= 0 or abs(float(ratio) - factor) > 1e-9 * max(1.0, abs(factor)):
+        return None
+    refinement = 2 * denominator
+    span = np.array([denominator - numerator, denominator + numerator])
+
+    # Runs of each row of cells, in refined columns.
+    order = np.lexsort((index[:, 0], index[:, 1]))
+    columns, rows = index[order, 0], index[order, 1]
+    starts, ends = refinement * columns + span[0], refinement * columns + span[1]
+    row_runs = {}
+    for chunk in np.split(np.arange(len(rows)), np.flatnonzero(np.diff(rows)) + 1):
+        row_runs[int(rows[chunk[0]])] = _merge_runs(starts[chunk], ends[chunk])
+
+    # A refined row is covered by every row of cells whose band reaches it.
+    cell_rows = np.array(sorted(row_runs), dtype=np.int64)
+    first_row = int(refinement * cell_rows[0] + span[0])
+    last_row = int(refinement * cell_rows[-1] + span[1])
+    if last_row - first_row > REFINED_ROW_LIMIT:
+        return None
+    refined_rows = {}
+    for refined in range(first_row, last_row):
+        low = np.searchsorted(cell_rows, (refined - span[1]) / refinement, side='right')
+        high = np.searchsorted(cell_rows, (refined - span[0]) / refinement, side='right')
+        if high > low:
+            window = [row_runs[int(row)] for row in cell_rows[low:high]]
+            refined_rows[refined] = _merge_runs(
+                np.concatenate([run[0] for run in window]),
+                np.concatenate([run[1] for run in window]))
+    return refinement, refined_rows
+
+
+def _run_outline_sides(rows):
+    """Directed boundary sides of a run-length cell set, own cells on the left.
+
+       The counterpart of the per-cell sides in _outline_loops: a run covers
+       cells [start, end) of one row, so its ends carry the vertical sides and
+       the parts of it that the row below (or above) does not cover carry the
+       horizontal ones. Sides come out as long as the geometry allows, which is
+       what keeps an inflated set to a few thousand segments.
+    """
+    empty = (np.zeros(0, dtype=np.int64), np.zeros(0, dtype=np.int64))
+    sides = []
+    for row, (starts, ends) in rows.items():
+        below = rows.get(row - 1, empty)
+        above = rows.get(row + 1, empty)
+        for start, end in zip(starts.tolist(), ends.tolist()):
+            sides.append((start, row + 1, start, row))          # left, -y
+            sides.append((end, row, end, row + 1))              # right, +y
+        for low, high in _subtract_runs(starts, ends, *below):
+            sides.append((low, row, high, row))                 # bottom, +x
+        for low, high in _subtract_runs(starts, ends, *above):
+            sides.append((high, row + 1, low, row + 1))         # top, -x
+    return np.array(sides, dtype=np.int64).reshape(-1, 4)
+
+
+def _stitch_loops(sides):
+    """Chain directed boundary sides head to tail into closed loops.
+
+       Each side has its own cells on the left, so outer boundaries come out
+       counter-clockwise and holes clockwise -- the winding the nonzero fill
+       rule needs to leave a hole empty. Where two components meet at a corner
+       the vertex has two ways on; the interior being on the left, the left
+       turn is the one that stays on this component. Every side is used once,
+       so the sides of both components still come out as complete loops.
+       Vertices between two sides of the same direction are dropped.
+    """
+    if len(sides) == 0:
+        return []
+    origin = np.array([sides[:, 0].min(), sides[:, 1].min()])
+    stride = int(sides[:, [1, 3]].max() - origin[1] + 2)
+    keys = (sides[:, 0] - origin[0]) * stride + (sides[:, 1] - origin[1])
+    leaving = {}
+    for edge, key in enumerate(keys.tolist()):
+        leaving.setdefault(key, []).append(edge)
+    used = np.zeros(len(sides), dtype=bool)
+    loops = []
+    for first in range(len(sides)):
+        if used[first]:
+            continue
+        loop, edge = [], first
+        while True:
+            used[edge] = True
+            loop.append(sides[edge, :2])
+            end = sides[edge, 2:]
+            key = int((end[0] - origin[0]) * stride + (end[1] - origin[1]))
+            candidates = [c for c in leaving.get(key, []) if not used[c]]
+            if not candidates:
+                break               # back at the start: in and out degrees match
+            if len(candidates) == 1:
+                edge = candidates[0]
+            else:
+                step = np.sign(end - sides[edge, :2])
+                left = np.array([-step[1], step[0]])
+                edge = max(candidates,
+                           key=lambda c: int(np.sign(sides[c, 2:] - sides[c, :2]) @ left))
+        loop = np.array(loop)
+        step = np.roll(loop, -1, axis=0) - loop
+        corner = np.any(np.sign(step) != np.sign(np.roll(step, 1, axis=0)), axis=1)
+        loops.append(loop[corner])
+    return loops
+
+
 def _outline_loops(index):
     """Boundary of a set of grid cells as closed loops of vertex indices.
 
        Cell (i, j) covers [i, i+1] x [j, j+1]. A side lies on the boundary
        exactly when the cell across it is absent, so the boundary is found by
        index lookups: the two-dimensional counterpart of _exposed_faces. Each
-       boundary side is directed with its own cell on the left; chained head
-       to tail, outer boundaries then wind counter-clockwise and holes
-       clockwise, which is what the nonzero fill rule of the PDF and Agg
-       backends needs to leave a hole empty. Where two components touch at a
-       corner the left turn keeps each on its own loop; every side is used
-       exactly once with that winding, so a loop that does pass through such a
-       vertex still fills correctly. Collinear vertices are dropped, so a
+       boundary side is directed with its own cell on the left, and _stitch_loops
+       chains them into loops; collinear vertices are dropped there, so a
        straight run of cells costs one segment however long it is.
     """
     index = np.unique(np.asarray(index, dtype=np.int64), axis=0)
@@ -242,56 +400,38 @@ def _outline_loops(index):
         exposed = ~np.isin((i + di) * stride + (j + dj), occupied)
         sides.append(np.column_stack([i[exposed] + ax, j[exposed] + ay,
                                       i[exposed] + bx, j[exposed] + by]))
-    sides = np.concatenate(sides)
-
-    vstride = j.max() + 3           # vertex coordinates run one past the cells
-    leaving = {}
-    for e, k in enumerate((sides[:, 0] * vstride + sides[:, 1]).tolist()):
-        leaving.setdefault(k, []).append(e)
-    used = np.zeros(len(sides), dtype=bool)
-    loops = []
-    for first in range(len(sides)):
-        if used[first]:
-            continue
-        loop, e = [], first
-        while True:
-            used[e] = True
-            loop.append(sides[e, :2])
-            end = sides[e, 2:]
-            candidates = [c for c in leaving.get(int(end[0] * vstride + end[1]), [])
-                          if not used[c]]
-            if not candidates:
-                break               # back at the start: in and out degrees match
-            if len(candidates) == 1:
-                e = candidates[0]
-            else:
-                # Two components meet at this corner. The interior is on the
-                # left, so the left turn continues along this component.
-                step = end - sides[e, :2]
-                left = np.array([-step[1], step[0]])
-                e = max(candidates, key=lambda c: int((sides[c, 2:] - sides[c, :2]) @ left))
-        loop = np.array(loop)
-        # A vertex between two sides of the same direction is not a corner.
-        step = np.roll(loop, -1, axis=0) - loop
-        corner = np.any(step != np.roll(step, 1, axis=0), axis=1)
-        loops.append(loop[corner] + (i0, j0))
-    return loops
+    return [loop + (i0, j0) for loop in _stitch_loops(np.concatenate(sides))]
 
 
-def _merged_outline(lower, upper):
+def _merged_outline(lower, upper, factor=1):
     """One compound path covering the union of aligned boxes, or None.
 
        Drawing a Morse set as the outline of its boxes rather than as the boxes
        themselves is what keeps the file small: a set of 10^5 cells is a
        handful of polygons, and every interior edge was invisible anyway.
+
+       factor scales each box about its own centre first, as the display
+       inflation of a small Morse set does. The scaled boxes overlap and no
+       longer sit on the grid, so their union is traced from the runs they
+       cover on a refined one (see _scaled_runs) instead of cell by cell. The
+       union is what a caller drawing the boxes one by one already sees,
+       provided the fill is opaque.
     """
     grid = _grid_index(lower, upper)
     if grid is None:
         return None
     origin, cell, index = grid
+    if factor == 1:
+        loops, step = _outline_loops(index), cell
+    else:
+        scaled = _scaled_runs(index, factor)
+        if scaled is None:
+            return None
+        refinement, rows = scaled
+        loops, step = _stitch_loops(_run_outline_sides(rows)), cell / refinement
     vertices, codes = [], []
-    for loop in _outline_loops(index):
-        points = origin + loop * cell
+    for loop in loops:
+        points = origin + loop * step
         vertices.extend(points.tolist())
         vertices.append(points[0].tolist())
         codes.extend([Path.MOVETO] + [Path.LINETO] * (len(points) - 1) + [Path.CLOSEPOLY])
@@ -303,10 +443,12 @@ def _draw_boxes(ax, rows, morse_nodes, dim, d1, d2, cmap, cmap_norm,
     """Add one artist per Morse set to ax. Returns the artists.
 
        By default a set is one PathPatch, the outline of the union of its
-       boxes (see _merged_outline). The boxes are drawn one by one, as a
-       PatchCollection, when merging is switched off, when the boxes do not
-       share one grid, when a scale_factor other than 1 moves them off it, or
-       when an explicit edge_clr asks for each box to be outlined.
+       boxes (see _merged_outline), inflated boxes included. The boxes are
+       drawn one by one, as a PatchCollection, when merging is switched off,
+       when the boxes do not share one grid, when an explicit edge_clr asks for
+       each box to be outlined, or when inflated boxes are drawn translucent:
+       their union is what a per-box drawing shows only where the overlaps do
+       not accumulate alpha.
     """
     drawn = []
     for morse_node in morse_nodes:
@@ -319,9 +461,14 @@ def _draw_boxes(ax, rows, morse_nodes, dim, d1, d2, cmap, cmap_norm,
         # between neighbouring boxes instead of outlining each one.
         edges = clr if edge_clr == None else edge_clr
         path = None
-        if merge_boxes and edge_clr == None and factor == 1:
+        # Unscaled boxes tile the grid, so their union is what a per-box drawing
+        # shows whatever the alpha. Inflated ones overlap, and a translucent
+        # fill accumulates over an overlap where the union does not.
+        opaque = alpha == None or alpha == 1
+        if merge_boxes and edge_clr == None and (factor == 1 or opaque):
             boxes = np.asarray([[float(v) for v in rect] for rect in morse_set])
-            path = _merged_outline(boxes[:, [d1, d2]], boxes[:, [dim + d1, dim + d2]])
+            path = _merged_outline(boxes[:, [d1, d2]], boxes[:, [dim + d1, dim + d2]],
+                                   factor)
         if path is not None:
             artist = PathPatch(path, facecolor=clr, edgecolor=edges, linewidth=linewidth,
                                alpha=alpha, rasterized=rasterize)
@@ -708,25 +855,27 @@ def _shaded_facecolors(faces, face_labels, cmap, cmap_norm, light_azdeg=300.0,
     return np.clip(shaded, 0.0, 1.0)
 
 
-def _place_zlabel_clear_of_ticks(fig, ax, label, pad_points):
-    """Keep a 3-D z label just clear of the z tick numbers, on every draw.
+def _place_zlabel_clear_of_ticks(ax, label, pad_points):
+    """Place a 3-D z label beside the z tick numbers whenever it is drawn.
 
        The label is a 2-D annotation positioned in axes fractions, but where
        the z tick numbers land is decided by the projection: the camera, the
        box aspect and the width of the numbers themselves all move them, and a
        caller is free to change any of those after the plot is built. A
-       position fixed in advance therefore cannot stay clear of them. Measure
-       the tick numbers instead, each time the figure is drawn, and nudge the
-       label to their right, centred on their span.
+       position fixed in advance therefore cannot stay clear of them, so the
+       label measures the numbers and moves itself instead.
 
-       The nudge is relative and settles in one draw, so the label is already
-       in place when a tight bounding box is measured at save time (that pass
-       draws the figure first). Repositioning stops once the label is within
-       half a pixel of where it should be, so an interactive backend cannot be
-       driven into a redraw loop.
+       It does that from its own draw, not from a draw_event. A 3-D axes lays
+       its tick numbers out while drawing, and draws the three axis objects
+       before the axes' text children, so a label drawing itself last sees the
+       positions this very pass is using. A draw_event fires only once
+       everything has been painted, which is too late for the file being
+       written: it would leave the first output with the label where it
+       started and correct only the second.
     """
-    def reposition(event):
-        renderer = getattr(event, 'renderer', None)
+    original_draw = label.draw
+
+    def draw(renderer):
         # Only ticks inside the view are placed by the 3-D axis when it draws;
         # the rest keep whatever position they last had, which is nowhere in
         # particular, so measuring them would throw the label off the page.
@@ -736,19 +885,22 @@ def _place_zlabel_clear_of_ticks(fig, ax, label, pad_points):
                  if low <= tick.get_loc() <= high
                  and tick.label1.get_visible() and tick.label1.get_text()]
         boxes = [box for box in boxes if box.width > 0 and box.height > 0]
-        if len(boxes) == 0:
-            # No tick numbers to clear: leave the label where it was placed.
-            return
-        own = label.get_window_extent(renderer)
-        axes_box = ax.get_window_extent(renderer)
-        dx = max(box.x1 for box in boxes) + pad_points * fig.dpi / 72.0 - own.x0
-        dy = 0.5 * (min(box.y0 for box in boxes) + max(box.y1 for box in boxes)
-                    - own.y0 - own.y1)
-        if abs(dx) < 0.5 and abs(dy) < 0.5:
-            return
-        x_pos, y_pos = label.get_position()
-        label.set_position((x_pos + dx / axes_box.width, y_pos + dy / axes_box.height))
-    fig.canvas.mpl_connect('draw_event', reposition)
+        # With no tick numbers to clear the label stays where it was placed.
+        if len(boxes) > 0:
+            own = label.get_window_extent(renderer)
+            axes_box = ax.get_window_extent(renderer)
+            dx = max(box.x1 for box in boxes) + pad_points * ax.figure.dpi / 72.0 - own.x0
+            dy = 0.5 * (min(box.y0 for box in boxes) + max(box.y1 for box in boxes)
+                        - own.y0 - own.y1)
+            # Half a pixel is already in place; moving would only mark the
+            # figure stale and make an interactive backend redraw.
+            if abs(dx) > 0.5 or abs(dy) > 0.5:
+                x_pos, y_pos = label.get_position()
+                label.set_position((x_pos + dx / axes_box.width,
+                                    y_pos + dy / axes_box.height))
+        original_draw(renderer)
+
+    label.draw = draw
 
 
 def PlotMorseSets3D(morse_sets, morse_nodes=None, cmap=None, clist=None, scale_factor=None,
@@ -854,10 +1006,10 @@ def PlotMorseSets3D(morse_sets, morse_nodes=None, cmap=None, clist=None, scale_f
                             rotation_mode='anchor', ha='center', va='center',
                             fontsize=fontsize, clip_on=False)
         if zlabel_pos == None:
-            # The pair above is only where the label starts: it is measured
-            # beside the tick numbers on the first draw. Pad by a third of the
-            # text size, as Matplotlib spaces its own labels off an axis.
-            _place_zlabel_clear_of_ticks(fig, ax, z_label, pad_points=fontsize / 3.0)
+            # The pair above is only where the label starts: it measures itself
+            # beside the tick numbers as it draws. Pad by a third of the text
+            # size, as Matplotlib spaces its own labels off an axis.
+            _place_zlabel_clear_of_ticks(ax, z_label, pad_points=fontsize / 3.0)
     ax.tick_params(labelsize=fontsize)
     return _finish(fig, ax, fig_fname, dpi, show, rasterize)
 
