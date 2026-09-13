@@ -202,7 +202,7 @@ jobs:
         shell: bash
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v4.2.0
+        uses: pypa/cibuildwheel@v4.2.1
         env:
           # These wheels build fine but their test env cannot be assembled
           # on Windows: matplotlib (a CMGDB dependency) ships no cp315
